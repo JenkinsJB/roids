@@ -1,0 +1,570 @@
+#+TITLE: ROIDS - Region Of Interest Designation System
+#+AUTHOR: Jason Jenkins
+#+DATE: 2025-11-15
+#+STARTUP: overview
+
+* Project Overview
+
+ROIDS (Region Of Interest Designation System) is a cross-platform native desktop application designed to help users define polygons and lines on images and video frames. These geometric annotations serve as configuration inputs for computer vision systems that count people or other objects within designated regions or crossing specified lines.
+
+** Purpose
+
+The application enables users to:
+- Visually define regions of interest (polygons) and counting lines on media files
+- Export geometric data in a normalized, machine-readable format
+- Iterate on configurations by reloading and editing previous work
+
+** Target Platforms
+
+Priority order:
+1. macOS (primary target)
+2. Linux (secondary target)
+3. Windows (nice-to-have)
+
+* License and Open Source
+
+** License Choice
+
+ROIDS is distributed under the *BSD 3-Clause License* (also known as "Modified BSD License").
+
+*Rationale:*
+- Permissive license that allows commercial use
+- Simple and well-understood
+- Does not impose viral copyleft restrictions
+- Requires attribution and preserves copyright notices
+- Includes non-endorsement clause protecting the project name
+- Compatible with all project dependencies
+
+** License Compatibility
+
+All project dependencies use permissive licenses compatible with BSD 3-Clause:
+
+| Dependency Type | Licenses | Compatibility |
+|-----------------+----------+---------------|
+| Rust crates | MIT, Apache-2.0 | ✓ Fully compatible |
+| OpenCV library | Apache-2.0 | ✓ Compatible (dynamic linking) |
+
+** Open Source Requirements
+
+- Source code SHALL be publicly available
+- License file SHALL be included in the repository root
+- Copyright notices SHALL be preserved in all source files
+- Third-party licenses SHALL be documented in CREDITS or NOTICE file
+- Contribution guidelines SHALL be provided for community contributions
+
+* Goals and Objectives
+
+** Primary Goals
+
+- Provide an intuitive interface for defining polygons and lines on static images and video frames
+- Export geometric data in normalized coordinates (0.0 to 1.0 range) suitable for CV system configuration
+- Enable iterative refinement through reload and edit capabilities
+- Maintain simplicity and focus on core functionality for MVP
+
+** Non-Goals (For MVP)
+
+- Real-time video processing or analysis
+- Integration with computer vision processing pipelines
+- Advanced styling or visualization options
+- Multi-user or collaborative editing
+- Cloud storage or synchronization
+
+* User Stories
+
+** Core User Journey
+
+1. As a user, I want to select an image or video file from my filesystem
+2. As a user, I want to see the selected media displayed in the application window
+3. As a user, I want to draw polygons and lines using mouse clicks
+4. As a user, I want to edit the positions of vertices and endpoints
+5. As a user, I want to name my regions and lines
+6. As a user, I want to export my annotations to a YAML or JSON file
+7. As a user, I want to reload a media file and its associated annotation file to make edits
+
+** Specific Interactions
+
+- As a user working with video, I want to scrub through the timeline to select an appropriate frame for annotation
+- As a user, I want to delete entire shapes or individual vertices
+- As a user, I want to close a polygon or leave it as an open polyline
+- As a user, I want my annotations to have sensible default names that I can optionally customize
+
+* Functional Requirements
+
+** FR-001: Media File Selection
+
+- The application SHALL provide a native file selection dialog
+- The application SHALL support common image formats (JPEG, PNG, BMP, TIFF)
+- The application SHALL support common video formats (MP4, AVI, MOV, MKV)
+- The application SHALL validate that selected files are readable and supported
+
+** FR-002: Image Display
+
+- The application SHALL display the selected image in the main window
+- The application SHALL scale the image to fit the window while maintaining aspect ratio
+- The application SHALL allow zooming and panning (nice-to-have for MVP)
+
+** FR-003: Video Frame Selection
+
+- The application SHALL provide a timeline scrubber control for video files
+- The application SHALL allow users to select a specific frame for annotation
+- The application SHALL assume fixed camera position (ROIs apply to entire video)
+- The application SHOULD display the current frame number or timestamp
+- Video playback with ROI overlay is a nice-to-have feature (not required for MVP)
+
+** FR-004: Polygon Creation
+
+- The application SHALL allow users to create polygons by clicking to add vertices
+- The application SHALL close a polygon when the user double-clicks
+- The application SHALL allow users to cancel polygon creation with the Escape key (creating an open polyline)
+- The application SHALL visually indicate the polygon being created
+- The application SHALL have no practical limit on the number of vertices
+
+** FR-005: Line Creation
+
+- The application SHALL allow users to create lines (two-point segments)
+- The application SHALL support polylines (multi-segment lines)
+- The application SHALL treat lines as unclosed polygons for implementation purposes
+
+** FR-006: Annotation Editing
+
+- The application SHALL allow users to select existing polygons and lines
+- The application SHALL allow users to drag vertices and endpoints to new positions
+- The application SHALL provide visual feedback for selected shapes and vertices
+- The application SHALL allow deletion of entire shapes via the Delete key
+- The application SHALL allow deletion of individual vertices via Ctrl+Click
+
+** FR-007: Annotation Naming
+
+- The application SHALL assign default sequential names ("region 1", "region 2", "line 1", etc.)
+- The application SHALL allow users to optionally rename any annotation
+- The application SHALL ensure names are preserved in exported data
+
+** FR-008: Data Export
+
+- The application SHALL export annotations to YAML or JSON format
+- The application SHALL normalize all coordinates to floating-point values between 0.0 and 1.0
+- The application SHALL include annotation names/labels in the export
+- Normalized coordinates SHALL be relative to the original media dimensions
+- The export format SHALL be human-readable and machine-parseable
+
+** FR-009: Reload and Edit
+
+- The application SHALL allow users to load a previously exported annotation file
+- The application SHALL associate the annotation file with its corresponding media file
+- The application SHALL reconstruct all polygons and lines from the loaded data
+- The application SHALL allow editing of reloaded annotations
+
+** FR-010: Basic UI Operations
+
+- The application SHALL provide menu or toolbar access to key functions
+- The application SHALL indicate the current tool/mode to the user
+- The application SHALL handle window resizing gracefully
+- The application SHOULD provide keyboard shortcuts for common operations
+
+* Non-Functional Requirements
+
+** NFR-001: Performance
+
+- The application SHALL load and display images up to 4K resolution without significant delay
+- The application SHALL handle video files up to 1 hour in length
+- The application SHALL respond to user interactions within 100ms under normal conditions
+
+** NFR-002: Usability
+
+- The application SHALL use native-looking UI widgets and dialogs
+- The application SHALL follow platform conventions for keyboard shortcuts
+- The application SHALL provide visual feedback for all user actions
+- Error messages SHALL be clear and actionable
+
+** NFR-003: Reliability
+
+- The application SHALL validate all user inputs
+- The application SHALL handle file I/O errors gracefully
+- The application SHALL prevent data loss during normal operation
+
+** NFR-004: Maintainability
+
+- Code SHALL be well-documented with clear comments
+- The application SHALL follow established design patterns
+- Dependencies SHALL be minimized and well-justified
+
+* Technical Requirements
+
+** TR-001: Programming Language and Framework
+
+Recommended technology stack:
+- *Language:* Rust (latest stable)
+- *GUI Framework:* egui with eframe
+- *Video Processing:* opencv crate or ffmpeg-next for video frame extraction
+- *Image Handling:* image crate for loading and manipulation
+- *Data Serialization:* serde with serde_yaml and serde_json
+
+*Rationale:*
+- Rust provides memory safety without garbage collection
+- Excellent performance for media handling and real-time UI
+- egui is purpose-built for tools and provides immediate mode rendering
+- Immediate mode GUI simplifies custom canvas drawing and interaction
+- Strong cross-platform support via eframe (egui + winit + wgpu)
+- Cargo provides excellent dependency management and build tooling
+- Single binary deployment makes distribution simple
+- Growing ecosystem with excellent documentation
+
+** TR-002: Data Format Specification
+
+*** Export Format Structure (YAML Example)
+
+#+BEGIN_SRC yaml
+media_file: "path/to/video.mp4"
+frame_width: 1920
+frame_height: 1080
+frame_number: 150  # for videos only
+annotations:
+  - name: "region 1"
+    type: "polygon"
+    vertices:
+      - [0.1234, 0.2345]
+      - [0.3456, 0.2345]
+      - [0.3456, 0.6789]
+      - [0.1234, 0.6789]
+  - name: "line 1"
+    type: "line"
+    vertices:
+      - [0.5000, 0.0000]
+      - [0.5000, 1.0000]
+#+END_SRC
+
+*** Coordinate Normalization
+
+- X coordinates: pixel_x / image_width → [0.0, 1.0]
+- Y coordinates: pixel_y / image_height → [0.0, 1.0]
+- Origin: top-left corner (0.0, 0.0)
+- Bottom-right corner: (1.0, 1.0)
+
+** TR-003: Project Structure
+
+#+BEGIN_SRC
+roids/
+├── README.org
+├── Cargo.toml               # Rust project manifest and dependencies
+├── Cargo.lock               # Locked dependency versions
+├── src/
+│   ├── main.rs              # Application entry point
+│   ├── app.rs               # Main application state and egui App trait
+│   ├── ui/
+│   │   ├── mod.rs
+│   │   ├── canvas.rs        # Drawing canvas area with custom painting
+│   │   ├── toolbar.rs       # Toolbar and tool selection
+│   │   ├── timeline.rs      # Video timeline scrubber
+│   │   └── properties.rs    # Annotation properties panel
+│   ├── models/
+│   │   ├── mod.rs
+│   │   ├── annotation.rs    # Annotation data structures (Polygon, Line)
+│   │   └── project.rs       # Project state management
+│   ├── io/
+│   │   ├── mod.rs
+│   │   ├── media.rs         # Image/video loading
+│   │   └── serialization.rs # YAML/JSON export/import
+│   └── util/
+│       ├── mod.rs
+│       └── geometry.rs      # Coordinate transformations and math
+├── tests/
+│   ├── integration_tests.rs
+│   └── ...
+├── docs/
+│   └── project.org          # This file
+└── assets/                  # Optional: icons, fonts, etc.
+    └── ...
+#+END_SRC
+
+** TR-004: Development Environment
+
+- Version control: Git
+- Build system: Cargo (Rust's package manager and build tool)
+- Testing framework: Built-in Rust test framework (cargo test)
+- Code formatting: rustfmt (cargo fmt)
+- Linting: clippy (cargo clippy)
+- Rust toolchain: rustup for managing Rust versions
+
+* UI/UX Specifications
+
+** Main Window Layout
+
+#+BEGIN_EXAMPLE
+┌─────────────────────────────────────────────────┐
+│ File  Edit  View  Tools  Help          [Menu]  │
+├─────────────────────────────────────────────────┤
+│ [Open] [Save] [Export]    [Tool Icons]         │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│                                                 │
+│          [Canvas - Image/Video Display]         │
+│          [with polygon/line overlays]           │
+│                                                 │
+│                                                 │
+├─────────────────────────────────────────────────┤
+│ [Timeline Scrubber]  (for videos)               │
+├─────────────────────────────────────────────────┤
+│ Annotations:        │ Properties:               │
+│ □ region 1          │ Name: [region 1    ]      │
+│ □ region 2          │ Type: Polygon             │
+│ ☑ line 1            │ Vertices: 2               │
+│                     │                           │
+└─────────────────────────────────────────────────┘
+#+END_EXAMPLE
+
+** Mouse Interactions
+
+| Action                    | Result                           |
+|---------------------------+----------------------------------|
+| Click (polygon mode)      | Add vertex                       |
+| Double-click              | Close polygon                    |
+| Escape key                | Finish polyline (leave open)     |
+| Click on vertex           | Select vertex                    |
+| Drag vertex               | Move vertex                      |
+| Ctrl + Click on vertex    | Delete vertex                    |
+| Click on shape            | Select shape                     |
+| Delete key (shape selected)| Delete shape                     |
+
+** Visual Styling (MVP)
+
+- Polygons/lines: Solid color (e.g., cyan or yellow for visibility)
+- Selected shape: Different color or thicker line
+- Active vertex: Highlighted (e.g., larger circle)
+- Line width: 2-3 pixels for visibility
+- Vertex markers: Small circles (5-7 pixel radius)
+
+Custom colors and line styles are deferred to post-MVP.
+
+* MVP Scope Definition
+
+** In Scope for MVP
+
+- [X] Image file loading and display
+- [X] Video file loading with frame selection via scrubber
+- [X] Polygon creation (click to add vertices, double-click to close)
+- [X] Polyline creation (Escape to finish without closing)
+- [X] Vertex editing (drag to move)
+- [X] Shape selection and deletion (Delete key)
+- [X] Individual vertex deletion (Ctrl+Click)
+- [X] Default sequential naming
+- [X] Name editing via properties panel
+- [X] Export to YAML and JSON with normalized coordinates
+- [X] Reload annotation file with media for editing
+- [X] Native file dialogs
+- [X] Basic menu and toolbar
+
+** Out of Scope for MVP
+
+- [ ] Undo/redo functionality (nice-to-have)
+- [ ] Video playback with ROI overlay (nice-to-have)
+- [ ] Zoom and pan controls (nice-to-have)
+- [ ] Custom colors and line styles
+- [ ] Different region/line types beyond naming
+- [ ] Batch processing multiple files
+- [ ] Integration with CV processing pipelines
+- [ ] Advanced shape operations (merge, split, etc.)
+- [ ] Image preprocessing or enhancement tools
+
+* Future Enhancements
+
+** Post-MVP Features
+
+*** Phase 2
+- Undo/redo support
+- Zoom and pan controls
+- Video playback with overlay visualization
+- Keyboard shortcuts for all operations
+- Copy/paste/duplicate shapes
+
+*** Phase 3
+- Custom colors and styles per annotation
+- Annotation grouping and layers
+- Templates and presets
+- Grid and snap-to-grid
+- Measurement tools (distance, area)
+
+*** Phase 4
+- Batch annotation mode
+- Export to additional formats (CSV, XML)
+- Integration APIs for CV pipelines
+- Plugin system for extensibility
+- Collaborative editing features
+
+* Development Milestones
+
+** Milestone 1: Basic Infrastructure (Week 1-2)
+- Set up project structure and development environment
+- Implement main window and basic UI layout
+- Implement image loading and display
+- Implement canvas widget for drawing
+
+** Milestone 2: Annotation Creation (Week 3-4)
+- Implement polygon creation with mouse clicks
+- Implement line/polyline creation
+- Implement visual rendering of shapes
+- Implement shape selection
+
+** Milestone 3: Editing Capabilities (Week 5-6)
+- Implement vertex dragging
+- Implement shape and vertex deletion
+- Implement naming and properties panel
+- Implement annotation list view
+
+** Milestone 4: Video Support (Week 7-8)
+- Implement video frame extraction
+- Implement timeline scrubber control
+- Integrate frame selection with canvas
+
+** Milestone 5: Data Persistence (Week 9-10)
+- Implement YAML export
+- Implement JSON export
+- Implement annotation file loading
+- Implement media+annotation reload workflow
+
+** Milestone 6: Polish and Testing (Week 11-12)
+- Cross-platform testing (macOS, Linux)
+- Bug fixes and refinements
+- Documentation
+- Release preparation
+
+* Testing Strategy
+
+** Unit Tests
+- Coordinate normalization and denormalization
+- Data serialization/deserialization (YAML/JSON)
+- Geometry utilities
+- Annotation data model
+
+** Integration Tests
+- File I/O operations
+- Media loading (images and videos)
+- Export/import round-trip
+
+** Manual Testing
+- UI interactions across platforms
+- Edge cases (very large/small images, long videos)
+- File format compatibility
+- User workflow validation
+
+* Documentation Requirements
+
+- User guide (org format)
+- Installation instructions per platform
+- Code documentation (docstrings)
+- Example annotation files
+- Architecture decision records (ADR) for key technical choices
+
+* Risk Assessment
+
+| Risk                          | Likelihood | Impact | Mitigation                              |
+|-------------------------------+------------+--------+-----------------------------------------|
+| Rust learning curve           | Medium     | Medium | Start with simple features, use docs    |
+| Video codec support issues    | Medium     | Medium | Test opencv vs ffmpeg crates early      |
+| egui maturity for this use    | Low        | Medium | egui is proven for tool UIs, many examples |
+| Cross-platform build issues   | Low        | Medium | Test early on all target platforms      |
+| Performance with large videos | Low        | Medium | Rust performance should handle well     |
+| Native file dialogs in egui   | Low        | Medium | Use rfd crate for native dialogs        |
+| Coordinate precision issues   | Low        | High   | Use f64 for coordinates, add validation |
+
+* Success Criteria
+
+The MVP will be considered successful when:
+
+1. A user can load an image or video file
+2. A user can create and edit polygons and lines
+3. A user can export annotations to YAML/JSON with normalized coordinates
+4. A user can reload and edit a previous annotation session
+5. The application runs stably on macOS and Linux
+6. The exported data is compatible with downstream CV systems
+7. The user experience is intuitive and responsive
+
+* Appendix
+
+** Dependencies (Initial)
+
+Primary dependencies to be added to Cargo.toml:
+
+#+BEGIN_SRC toml
+[dependencies]
+# GUI framework
+eframe = "0.28"      # egui framework for native apps
+egui = "0.28"        # Immediate mode GUI library
+rfd = "0.14"         # Native file dialogs (rusty file dialogs)
+
+# Image handling
+image = "0.25"       # Image loading and manipulation
+
+# Video processing (choose one based on testing)
+opencv = "0.92"      # OpenCV bindings (comprehensive but large)
+# OR
+# ffmpeg-next = "7.0"  # FFmpeg bindings (lighter weight)
+
+# Data serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_yaml = "0.9"
+
+# Utilities
+anyhow = "1.0"       # Error handling
+log = "0.4"          # Logging facade
+env_logger = "0.11"  # Simple logger implementation
+#+END_SRC
+
+** License Implementation Notes
+
+*** Cargo.toml Metadata
+
+The Cargo.toml file SHALL include:
+
+#+BEGIN_SRC toml
+[package]
+name = "roids"
+version = "0.1.0"
+edition = "2021"
+authors = ["Jason Jenkins"]
+license = "BSD-3-Clause"
+description = "Region Of Interest Designation System - A tool for annotating images and videos"
+repository = "https://github.com/yourusername/roids"
+keywords = ["computer-vision", "annotation", "roi", "image-processing"]
+categories = ["multimedia::video", "graphics"]
+#+END_SRC
+
+*** License Files Required
+
+- LICENSE or LICENSE.txt containing the full BSD 3-Clause license text
+- Optional NOTICE or CREDITS file documenting third-party components
+- README should include license badge and attribution section
+
+*** OpenCV/FFmpeg Considerations
+
+- The opencv Rust crate (MIT) wraps the OpenCV C++ library (Apache-2.0)
+- Apache-2.0 is compatible with BSD 3-Clause when dynamically linked
+- If using ffmpeg-next, note that FFmpeg itself may be LGPL or GPL depending on build configuration
+- For maximum permissiveness, ensure FFmpeg is built with LGPL-compatible options only
+- Document runtime dependencies in README
+
+** Reference Materials
+
+- egui documentation: https://docs.rs/egui/
+- egui GitHub and examples: https://github.com/emilk/egui
+- eframe documentation: https://docs.rs/eframe/
+- The Rust Programming Language book: https://doc.rust-lang.org/book/
+- image crate documentation: https://docs.rs/image/
+- opencv crate documentation: https://docs.rs/opencv/
+- serde documentation: https://serde.rs/
+- BSD 3-Clause license text: https://opensource.org/licenses/BSD-3-Clause
+
+** Glossary
+
+- *ROI*: Region Of Interest - a polygon defining an area to monitor
+- *Counting Line*: A line segment across which objects are counted
+- *Normalized Coordinates*: Coordinates scaled to [0.0, 1.0] range
+- *Polyline*: A series of connected line segments (open polygon)
+- *Vertex*: A point defining a corner of a polygon or endpoint of a line
+- *Annotation*: A generic term for any polygon or line defined by the user
+
+* Notes
+
+This document serves as the primary reference for the ROIDS application development. It should be updated as requirements evolve or technical decisions are made.
+
+The document prioritizes simplicity and functionality for the MVP while maintaining a clear vision for future enhancements.

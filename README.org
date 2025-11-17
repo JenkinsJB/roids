@@ -1,0 +1,150 @@
+#+TITLE: ROIDS - Region Of Interest Designation System
+#+AUTHOR: Jason Jenkins
+#+DATE: 2025
+
+* Overview
+
+ROIDS (Region Of Interest Designation System) is a cross-platform desktop application for annotating images and videos with regions of interest (polygons) and counting lines. It's designed to help configure computer vision systems that count people or objects within designated regions or crossing specified lines.
+
+* Features
+
+- Load images (JPEG, PNG, BMP, TIFF) and videos (MP4, AVI, MOV, MKV)
+- Draw polygons and lines on images/video frames
+- Edit annotations by dragging vertices
+- Export annotations to YAML or JSON with normalized coordinates
+- Reload and edit previous annotation sessions
+- Native file dialogs and cross-platform UI
+
+* Installation
+
+** Prerequisites
+
+- Rust toolchain (1.70 or later)
+- OpenCV libraries (for video support)
+
+** Building from Source
+
+#+BEGIN_SRC bash
+# Clone the repository
+git clone https://github.com/yourusername/roids.git
+cd roids
+
+# Build the project
+cargo build --release
+
+# Run the application
+cargo run --release
+#+END_SRC
+
+** Installing OpenCV
+
+*** macOS (using Homebrew)
+#+BEGIN_SRC bash
+brew install opencv
+#+END_SRC
+
+*** Linux (Ubuntu/Debian)
+#+BEGIN_SRC bash
+sudo apt-get install libopencv-dev clang libclang-dev
+#+END_SRC
+
+*** Windows
+See the [[https://docs.rs/opencv/][opencv crate documentation]] for Windows installation instructions.
+
+* Usage
+
+1. Launch the application
+2. Open an image or video file
+3. For videos, use the timeline scrubber to select a frame
+4. Use the toolbar to select polygon or line drawing mode
+5. Click to add vertices (double-click to close polygon)
+6. Edit by dragging vertices
+7. Name your annotations in the properties panel
+8. Export to YAML or JSON format
+
+* Development
+
+** Project Structure
+
+#+BEGIN_SRC
+roids/
+├── src/
+│   ├── main.rs          # Application entry point
+│   ├── app.rs           # Main application state
+│   ├── ui/              # UI components
+│   ├── models/          # Data structures
+│   ├── io/              # File I/O and serialization
+│   └── util/            # Utility functions
+├── docs/                # Documentation
+├── tests/               # Test suite
+└── assets/              # Optional assets
+#+END_SRC
+
+** Running Tests
+
+#+BEGIN_SRC bash
+cargo test
+#+END_SRC
+
+** Code Formatting and Linting
+
+#+BEGIN_SRC bash
+# Format code
+cargo fmt
+
+# Run linter
+cargo clippy
+#+END_SRC
+
+* Export Format
+
+Annotations are exported with normalized coordinates (0.0 to 1.0 range):
+
+#+BEGIN_SRC yaml
+media_file: "path/to/video.mp4"
+frame_width: 1920
+frame_height: 1080
+frame_number: 150
+annotations:
+  - name: "region 1"
+    type: "polygon"
+    vertices:
+      - [0.1234, 0.2345]
+      - [0.3456, 0.2345]
+      - [0.3456, 0.6789]
+      - [0.1234, 0.6789]
+  - name: "line 1"
+    type: "line"
+    vertices:
+      - [0.5000, 0.0000]
+      - [0.5000, 1.0000]
+#+END_SRC
+
+* Contributing
+
+Contributions are welcome! Please feel free to submit issues and pull requests.
+
+** Guidelines
+
+- Follow the existing code style
+- Add tests for new features
+- Update documentation as needed
+- Ensure all tests pass before submitting
+
+* License
+
+This project is licensed under the BSD 3-Clause License - see the [[file:LICENSE][LICENSE]] file for details.
+
+Copyright (c) 2025, Jason Jenkins. All rights reserved.
+
+* Acknowledgments
+
+- Built with [[https://github.com/emilk/egui][egui]] - An easy-to-use immediate mode GUI in Rust
+- Uses [[https://docs.rs/opencv/][opencv-rust]] bindings for video processing
+- Serialization powered by [[https://serde.rs/][serde]]
+
+* Resources
+
+- [[file:docs/project.org][Project Requirements]] - Detailed project specification
+- [[https://github.com/emilk/egui][egui Documentation]]
+- [[https://doc.rust-lang.org/book/][The Rust Programming Language]]

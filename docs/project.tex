@@ -1,0 +1,604 @@
+% Created 2025-11-15 Sat 23:06
+% Intended LaTeX compiler: pdflatex
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{graphicx}
+\usepackage{longtable}
+\usepackage{wrapfig}
+\usepackage{rotating}
+\usepackage[normalem]{ulem}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{capt-of}
+\usepackage{hyperref}
+\author{Jason Jenkins}
+\date{2025-11-15}
+\title{ROIDS - Region Of Interest Designation System}
+\hypersetup{
+ pdfauthor={Jason Jenkins},
+ pdftitle={ROIDS - Region Of Interest Designation System},
+ pdfkeywords={},
+ pdfsubject={},
+ pdfcreator={Emacs 29.4 (Org mode 9.7.34)}, 
+ pdflang={English}}
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Project Overview}
+\label{sec:orgfd15405}
+
+ROIDS (Region Of Interest Designation System) is a cross-platform native desktop application designed to help users define polygons and lines on images and video frames. These geometric annotations serve as configuration inputs for computer vision systems that count people or other objects within designated regions or crossing specified lines.
+\subsection{Purpose}
+\label{sec:orgbdc103f}
+
+The application enables users to:
+\begin{itemize}
+\item Visually define regions of interest (polygons) and counting lines on media files
+\item Export geometric data in a normalized, machine-readable format
+\item Iterate on configurations by reloading and editing previous work
+\end{itemize}
+\subsection{Target Platforms}
+\label{sec:org5e83758}
+
+Priority order:
+\begin{enumerate}
+\item macOS (primary target)
+\item Linux (secondary target)
+\item Windows (nice-to-have)
+\end{enumerate}
+\section{Goals and Objectives}
+\label{sec:org8f703d7}
+
+\subsection{Primary Goals}
+\label{sec:org8396f88}
+
+\begin{itemize}
+\item Provide an intuitive interface for defining polygons and lines on static images and video frames
+\item Export geometric data in normalized coordinates (0.0 to 1.0 range) suitable for CV system configuration
+\item Enable iterative refinement through reload and edit capabilities
+\item Maintain simplicity and focus on core functionality for MVP
+\end{itemize}
+\subsection{Non-Goals (For MVP)}
+\label{sec:org4fbfc54}
+
+\begin{itemize}
+\item Real-time video processing or analysis
+\item Integration with computer vision processing pipelines
+\item Advanced styling or visualization options
+\item Multi-user or collaborative editing
+\item Cloud storage or synchronization
+\end{itemize}
+\section{User Stories}
+\label{sec:orgd93378a}
+
+\subsection{Core User Journey}
+\label{sec:orgafa00f2}
+
+\begin{enumerate}
+\item As a user, I want to select an image or video file from my filesystem
+\item As a user, I want to see the selected media displayed in the application window
+\item As a user, I want to draw polygons and lines using mouse clicks
+\item As a user, I want to edit the positions of vertices and endpoints
+\item As a user, I want to name my regions and lines
+\item As a user, I want to export my annotations to a YAML or JSON file
+\item As a user, I want to reload a media file and its associated annotation file to make edits
+\end{enumerate}
+\subsection{Specific Interactions}
+\label{sec:orgd679e88}
+
+\begin{itemize}
+\item As a user working with video, I want to scrub through the timeline to select an appropriate frame for annotation
+\item As a user, I want to delete entire shapes or individual vertices
+\item As a user, I want to close a polygon or leave it as an open polyline
+\item As a user, I want my annotations to have sensible default names that I can optionally customize
+\end{itemize}
+\section{Functional Requirements}
+\label{sec:orga0cdfd4}
+
+\subsection{FR-001: Media File Selection}
+\label{sec:org433416a}
+
+\begin{itemize}
+\item The application SHALL provide a native file selection dialog
+\item The application SHALL support common image formats (JPEG, PNG, BMP, TIFF)
+\item The application SHALL support common video formats (MP4, AVI, MOV, MKV)
+\item The application SHALL validate that selected files are readable and supported
+\end{itemize}
+\subsection{FR-002: Image Display}
+\label{sec:org30ce430}
+
+\begin{itemize}
+\item The application SHALL display the selected image in the main window
+\item The application SHALL scale the image to fit the window while maintaining aspect ratio
+\item The application SHALL allow zooming and panning (nice-to-have for MVP)
+\end{itemize}
+\subsection{FR-003: Video Frame Selection}
+\label{sec:orgf4b80e6}
+
+\begin{itemize}
+\item The application SHALL provide a timeline scrubber control for video files
+\item The application SHALL allow users to select a specific frame for annotation
+\item The application SHALL assume fixed camera position (ROIs apply to entire video)
+\item The application SHOULD display the current frame number or timestamp
+\item Video playback with ROI overlay is a nice-to-have feature (not required for MVP)
+\end{itemize}
+\subsection{FR-004: Polygon Creation}
+\label{sec:orgba80453}
+
+\begin{itemize}
+\item The application SHALL allow users to create polygons by clicking to add vertices
+\item The application SHALL close a polygon when the user double-clicks
+\item The application SHALL allow users to cancel polygon creation with the Escape key (creating an open polyline)
+\item The application SHALL visually indicate the polygon being created
+\item The application SHALL have no practical limit on the number of vertices
+\end{itemize}
+\subsection{FR-005: Line Creation}
+\label{sec:org90607b6}
+
+\begin{itemize}
+\item The application SHALL allow users to create lines (two-point segments)
+\item The application SHALL support polylines (multi-segment lines)
+\item The application SHALL treat lines as unclosed polygons for implementation purposes
+\end{itemize}
+\subsection{FR-006: Annotation Editing}
+\label{sec:org816a828}
+
+\begin{itemize}
+\item The application SHALL allow users to select existing polygons and lines
+\item The application SHALL allow users to drag vertices and endpoints to new positions
+\item The application SHALL provide visual feedback for selected shapes and vertices
+\item The application SHALL allow deletion of entire shapes via the Delete key
+\item The application SHALL allow deletion of individual vertices via Ctrl+Click
+\end{itemize}
+\subsection{FR-007: Annotation Naming}
+\label{sec:orgdefd859}
+
+\begin{itemize}
+\item The application SHALL assign default sequential names (``region 1'', ``region 2'', ``line 1'', etc.)
+\item The application SHALL allow users to optionally rename any annotation
+\item The application SHALL ensure names are preserved in exported data
+\end{itemize}
+\subsection{FR-008: Data Export}
+\label{sec:org261c587}
+
+\begin{itemize}
+\item The application SHALL export annotations to YAML or JSON format
+\item The application SHALL normalize all coordinates to floating-point values between 0.0 and 1.0
+\item The application SHALL include annotation names/labels in the export
+\item Normalized coordinates SHALL be relative to the original media dimensions
+\item The export format SHALL be human-readable and machine-parseable
+\end{itemize}
+\subsection{FR-009: Reload and Edit}
+\label{sec:orgbd6e8bf}
+
+\begin{itemize}
+\item The application SHALL allow users to load a previously exported annotation file
+\item The application SHALL associate the annotation file with its corresponding media file
+\item The application SHALL reconstruct all polygons and lines from the loaded data
+\item The application SHALL allow editing of reloaded annotations
+\end{itemize}
+\subsection{FR-010: Basic UI Operations}
+\label{sec:org82ccbf0}
+
+\begin{itemize}
+\item The application SHALL provide menu or toolbar access to key functions
+\item The application SHALL indicate the current tool/mode to the user
+\item The application SHALL handle window resizing gracefully
+\item The application SHOULD provide keyboard shortcuts for common operations
+\end{itemize}
+\section{Non-Functional Requirements}
+\label{sec:org5a4d08f}
+
+\subsection{NFR-001: Performance}
+\label{sec:org34a75e2}
+
+\begin{itemize}
+\item The application SHALL load and display images up to 4K resolution without significant delay
+\item The application SHALL handle video files up to 1 hour in length
+\item The application SHALL respond to user interactions within 100ms under normal conditions
+\end{itemize}
+\subsection{NFR-002: Usability}
+\label{sec:orga046c5b}
+
+\begin{itemize}
+\item The application SHALL use native-looking UI widgets and dialogs
+\item The application SHALL follow platform conventions for keyboard shortcuts
+\item The application SHALL provide visual feedback for all user actions
+\item Error messages SHALL be clear and actionable
+\end{itemize}
+\subsection{NFR-003: Reliability}
+\label{sec:org9855780}
+
+\begin{itemize}
+\item The application SHALL validate all user inputs
+\item The application SHALL handle file I/O errors gracefully
+\item The application SHALL prevent data loss during normal operation
+\end{itemize}
+\subsection{NFR-004: Maintainability}
+\label{sec:orgf15cb5a}
+
+\begin{itemize}
+\item Code SHALL be well-documented with clear comments
+\item The application SHALL follow established design patterns
+\item Dependencies SHALL be minimized and well-justified
+\end{itemize}
+\section{Technical Requirements}
+\label{sec:org1b9f27a}
+
+\subsection{TR-001: Programming Language and Framework}
+\label{sec:orgd9d5d9e}
+
+Recommended technology stack:
+\begin{itemize}
+\item \textbf{Language:} Python 3.10+
+\item \textbf{GUI Framework:} PyQt6 or PySide6 (Qt for Python)
+\item \textbf{Video Processing:} OpenCV (cv2) for video frame extraction
+\item \textbf{Image Handling:} Pillow (PIL) for image loading and manipulation
+\item \textbf{Data Serialization:} PyYAML for YAML, built-in json module for JSON
+\end{itemize}
+
+\textbf{Rationale:}
+\begin{itemize}
+\item Python provides rapid development and you have strong experience
+\item Qt provides native-looking widgets on all target platforms
+\item Qt handles cross-platform differences without platform-specific code
+\item OpenCV is industry-standard for video/image processing
+\item Mature ecosystem with excellent documentation
+\end{itemize}
+\subsection{TR-002: Data Format Specification}
+\label{sec:orgdf1d3f2}
+
+\subsubsection{Export Format Structure (YAML Example)}
+\label{sec:orgc48cf6c}
+
+\begin{verbatim}
+media_file: "path/to/video.mp4"
+frame_width: 1920
+frame_height: 1080
+frame_number: 150  # for videos only
+annotations:
+  - name: "region 1"
+    type: "polygon"
+    vertices:
+      - [0.1234, 0.2345]
+      - [0.3456, 0.2345]
+      - [0.3456, 0.6789]
+      - [0.1234, 0.6789]
+  - name: "line 1"
+    type: "line"
+    vertices:
+      - [0.5000, 0.0000]
+      - [0.5000, 1.0000]
+\end{verbatim}
+\subsubsection{Coordinate Normalization}
+\label{sec:orgbc70c5b}
+
+\begin{itemize}
+\item X coordinates: pixel\textsubscript{x} / image\textsubscript{width} → [0.0, 1.0]
+\item Y coordinates: pixel\textsubscript{y} / image\textsubscript{height} → [0.0, 1.0]
+\item Origin: top-left corner (0.0, 0.0)
+\item Bottom-right corner: (1.0, 1.0)
+\end{itemize}
+\subsection{TR-003: Project Structure}
+\label{sec:orgda95fe0}
+
+\begin{verbatim}
+roids/
+├── README.org
+├── requirements.txt
+├── setup.py
+├── src/
+│   ├── __init__.py
+│   ├── main.py              # Application entry point
+│   ├── ui/
+│   │   ├── __init__.py
+│   │   ├── main_window.py   # Main application window
+│   │   ├── canvas.py        # Drawing canvas widget
+│   │   └── controls.py      # Timeline, toolbars, etc.
+│   ├── models/
+│   │   ├── __init__.py
+│   │   ├── annotation.py    # Annotation data structures
+│   │   └── project.py       # Project state management
+│   ├── io/
+│   │   ├── __init__.py
+│   │   ├── media_loader.py  # Image/video loading
+│   │   └── exporter.py      # YAML/JSON export
+│   └── utils/
+│       ├── __init__.py
+│       └── geometry.py      # Coordinate transformations
+├── tests/
+│   └── ...
+└── docs/
+    └── project.org          # This file
+\end{verbatim}
+\subsection{TR-004: Development Environment}
+\label{sec:orgf0ec336}
+
+\begin{itemize}
+\item Version control: Git
+\item Dependency management: pip + requirements.txt or poetry
+\item Testing framework: pytest
+\item Code formatting: black, isort
+\item Linting: pylint or ruff
+\end{itemize}
+\section{UI/UX Specifications}
+\label{sec:orgd9bbf3b}
+
+\subsection{Main Window Layout}
+\label{sec:org0865247}
+
+\begin{verbatim}
+┌─────────────────────────────────────────────────┐
+│ File  Edit  View  Tools  Help          [Menu]  │
+├─────────────────────────────────────────────────┤
+│ [Open] [Save] [Export]    [Tool Icons]         │
+├─────────────────────────────────────────────────┤
+│                                                 │
+│                                                 │
+│          [Canvas - Image/Video Display]         │
+│          [with polygon/line overlays]           │
+│                                                 │
+│                                                 │
+├─────────────────────────────────────────────────┤
+│ [Timeline Scrubber]  (for videos)               │
+├─────────────────────────────────────────────────┤
+│ Annotations:        │ Properties:               │
+│ □ region 1          │ Name: [region 1    ]      │
+│ □ region 2          │ Type: Polygon             │
+│ ☑ line 1            │ Vertices: 2               │
+│                     │                           │
+└─────────────────────────────────────────────────┘
+\end{verbatim}
+\subsection{Mouse Interactions}
+\label{sec:org79cb629}
+
+\begin{center}
+\begin{tabular}{ll}
+Action & Result\\
+\hline
+Click (polygon mode) & Add vertex\\
+Double-click & Close polygon\\
+Escape key & Finish polyline (leave open)\\
+Click on vertex & Select vertex\\
+Drag vertex & Move vertex\\
+Ctrl + Click on vertex & Delete vertex\\
+Click on shape & Select shape\\
+Delete key (shape selected) & Delete shape\\
+\end{tabular}
+\end{center}
+\subsection{Visual Styling (MVP)}
+\label{sec:org2051d6d}
+
+\begin{itemize}
+\item Polygons/lines: Solid color (e.g., cyan or yellow for visibility)
+\item Selected shape: Different color or thicker line
+\item Active vertex: Highlighted (e.g., larger circle)
+\item Line width: 2-3 pixels for visibility
+\item Vertex markers: Small circles (5-7 pixel radius)
+\end{itemize}
+
+Custom colors and line styles are deferred to post-MVP.
+\section{MVP Scope Definition}
+\label{sec:org46a67c5}
+
+\subsection{In Scope for MVP}
+\label{sec:org20f4ae5}
+
+\begin{itemize}
+\item[{$\boxtimes$}] Image file loading and display
+\item[{$\boxtimes$}] Video file loading with frame selection via scrubber
+\item[{$\boxtimes$}] Polygon creation (click to add vertices, double-click to close)
+\item[{$\boxtimes$}] Polyline creation (Escape to finish without closing)
+\item[{$\boxtimes$}] Vertex editing (drag to move)
+\item[{$\boxtimes$}] Shape selection and deletion (Delete key)
+\item[{$\boxtimes$}] Individual vertex deletion (Ctrl+Click)
+\item[{$\boxtimes$}] Default sequential naming
+\item[{$\boxtimes$}] Name editing via properties panel
+\item[{$\boxtimes$}] Export to YAML and JSON with normalized coordinates
+\item[{$\boxtimes$}] Reload annotation file with media for editing
+\item[{$\boxtimes$}] Native file dialogs
+\item[{$\boxtimes$}] Basic menu and toolbar
+\end{itemize}
+\subsection{Out of Scope for MVP}
+\label{sec:orge75f470}
+
+\begin{itemize}
+\item[{$\square$}] Undo/redo functionality (nice-to-have)
+\item[{$\square$}] Video playback with ROI overlay (nice-to-have)
+\item[{$\square$}] Zoom and pan controls (nice-to-have)
+\item[{$\square$}] Custom colors and line styles
+\item[{$\square$}] Different region/line types beyond naming
+\item[{$\square$}] Batch processing multiple files
+\item[{$\square$}] Integration with CV processing pipelines
+\item[{$\square$}] Advanced shape operations (merge, split, etc.)
+\item[{$\square$}] Image preprocessing or enhancement tools
+\end{itemize}
+\section{Future Enhancements}
+\label{sec:org605e5e0}
+
+\subsection{Post-MVP Features}
+\label{sec:org44e788b}
+
+\subsubsection{Phase 2}
+\label{sec:org199c12b}
+\begin{itemize}
+\item Undo/redo support
+\item Zoom and pan controls
+\item Video playback with overlay visualization
+\item Keyboard shortcuts for all operations
+\item Copy/paste/duplicate shapes
+\end{itemize}
+\subsubsection{Phase 3}
+\label{sec:org4130adb}
+\begin{itemize}
+\item Custom colors and styles per annotation
+\item Annotation grouping and layers
+\item Templates and presets
+\item Grid and snap-to-grid
+\item Measurement tools (distance, area)
+\end{itemize}
+\subsubsection{Phase 4}
+\label{sec:org7982a8a}
+\begin{itemize}
+\item Batch annotation mode
+\item Export to additional formats (CSV, XML)
+\item Integration APIs for CV pipelines
+\item Plugin system for extensibility
+\item Collaborative editing features
+\end{itemize}
+\section{Development Milestones}
+\label{sec:org1397970}
+
+\subsection{Milestone 1: Basic Infrastructure (Week 1-2)}
+\label{sec:org400e0b7}
+\begin{itemize}
+\item Set up project structure and development environment
+\item Implement main window and basic UI layout
+\item Implement image loading and display
+\item Implement canvas widget for drawing
+\end{itemize}
+\subsection{Milestone 2: Annotation Creation (Week 3-4)}
+\label{sec:orgdaa7b44}
+\begin{itemize}
+\item Implement polygon creation with mouse clicks
+\item Implement line/polyline creation
+\item Implement visual rendering of shapes
+\item Implement shape selection
+\end{itemize}
+\subsection{Milestone 3: Editing Capabilities (Week 5-6)}
+\label{sec:org4b61cbb}
+\begin{itemize}
+\item Implement vertex dragging
+\item Implement shape and vertex deletion
+\item Implement naming and properties panel
+\item Implement annotation list view
+\end{itemize}
+\subsection{Milestone 4: Video Support (Week 7-8)}
+\label{sec:orgc0ce34f}
+\begin{itemize}
+\item Implement video frame extraction
+\item Implement timeline scrubber control
+\item Integrate frame selection with canvas
+\end{itemize}
+\subsection{Milestone 5: Data Persistence (Week 9-10)}
+\label{sec:org9fd0711}
+\begin{itemize}
+\item Implement YAML export
+\item Implement JSON export
+\item Implement annotation file loading
+\item Implement media+annotation reload workflow
+\end{itemize}
+\subsection{Milestone 6: Polish and Testing (Week 11-12)}
+\label{sec:org5f63e9e}
+\begin{itemize}
+\item Cross-platform testing (macOS, Linux)
+\item Bug fixes and refinements
+\item Documentation
+\item Release preparation
+\end{itemize}
+\section{Testing Strategy}
+\label{sec:orgf47c26f}
+
+\subsection{Unit Tests}
+\label{sec:org2bd67ff}
+\begin{itemize}
+\item Coordinate normalization and denormalization
+\item Data serialization/deserialization (YAML/JSON)
+\item Geometry utilities
+\item Annotation data model
+\end{itemize}
+\subsection{Integration Tests}
+\label{sec:org1658cb2}
+\begin{itemize}
+\item File I/O operations
+\item Media loading (images and videos)
+\item Export/import round-trip
+\end{itemize}
+\subsection{Manual Testing}
+\label{sec:orgc926f0c}
+\begin{itemize}
+\item UI interactions across platforms
+\item Edge cases (very large/small images, long videos)
+\item File format compatibility
+\item User workflow validation
+\end{itemize}
+\section{Documentation Requirements}
+\label{sec:orgcb590c1}
+
+\begin{itemize}
+\item User guide (org format)
+\item Installation instructions per platform
+\item Code documentation (docstrings)
+\item Example annotation files
+\item Architecture decision records (ADR) for key technical choices
+\end{itemize}
+\section{Risk Assessment}
+\label{sec:org9036f5c}
+
+\begin{center}
+\begin{tabular}{llll}
+Risk & Likelihood & Impact & Mitigation\\
+\hline
+Qt licensing complexity & Low & High & Use PySide6 (LGPL) if needed\\
+Video codec support issues & Medium & Medium & Use OpenCV's codec support, document\\
+Cross-platform UI differences & Low & Medium & Test early on all target platforms\\
+Performance with large videos & Medium & Medium & Optimize frame extraction, add progress\\
+Coordinate precision issues & Low & High & Use double precision, add validation\\
+\end{tabular}
+\end{center}
+\section{Success Criteria}
+\label{sec:orgea0a955}
+
+The MVP will be considered successful when:
+
+\begin{enumerate}
+\item A user can load an image or video file
+\item A user can create and edit polygons and lines
+\item A user can export annotations to YAML/JSON with normalized coordinates
+\item A user can reload and edit a previous annotation session
+\item The application runs stably on macOS and Linux
+\item The exported data is compatible with downstream CV systems
+\item The user experience is intuitive and responsive
+\end{enumerate}
+\section{Appendix}
+\label{sec:orgcf76945}
+
+\subsection{Dependencies (Initial)}
+\label{sec:orgf4bbf09}
+
+\begin{verbatim}
+PyQt6>=6.6.0
+opencv-python>=4.8.0
+Pillow>=10.0.0
+PyYAML>=6.0
+numpy>=1.24.0
+\end{verbatim}
+\subsection{Reference Materials}
+\label{sec:orgf0b35a4}
+
+\begin{itemize}
+\item Qt for Python documentation: \url{https://doc.qt.io/qtforpython/}
+\item OpenCV Python tutorials: \url{https://docs.opencv.org/4.x/d6/d00/tutorial\_py\_root.html}
+\item PyYAML documentation: \url{https://pyyaml.org/wiki/PyYAMLDocumentation}
+\end{itemize}
+\subsection{Glossary}
+\label{sec:orgc41eaf7}
+
+\begin{itemize}
+\item \textbf{ROI}: Region Of Interest - a polygon defining an area to monitor
+\item \textbf{Counting Line}: A line segment across which objects are counted
+\item \textbf{Normalized Coordinates}: Coordinates scaled to [0.0, 1.0] range
+\item \textbf{Polyline}: A series of connected line segments (open polygon)
+\item \textbf{Vertex}: A point defining a corner of a polygon or endpoint of a line
+\item \textbf{Annotation}: A generic term for any polygon or line defined by the user
+\end{itemize}
+\section{Notes}
+\label{sec:orgd203b5b}
+
+This document serves as the primary reference for the ROIDS application development. It should be updated as requirements evolve or technical decisions are made.
+
+The document prioritizes simplicity and functionality for the MVP while maintaining a clear vision for future enhancements.
+\end{document}
