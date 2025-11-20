@@ -10,7 +10,13 @@ use crate::app::Tool;
 use crate::models::project::ProjectData;
 
 /// Display the main canvas area.
-pub fn show(ui: &mut egui::Ui, project: &Option<ProjectData>, current_tool: Tool) {
+pub fn show(
+    ui: &mut egui::Ui,
+    project: &Option<ProjectData>,
+    current_tool: Tool,
+    image_texture: &Option<egui::TextureHandle>,
+    image_size: Option<(u32, u32)>,
+) {
     // Set background color
     ui.style_mut().visuals.extreme_bg_color = egui::Color32::from_gray(40);
 
@@ -20,15 +26,51 @@ pub fn show(ui: &mut egui::Ui, project: &Option<ProjectData>, current_tool: Tool
     egui::Frame::canvas(ui.style()).show(ui, |ui| {
         ui.set_min_size(available_size);
 
-        if let Some(proj) = project {
-            // TODO: Draw loaded image/video frame and annotations
+        if let Some(texture) = image_texture {
+            // Display the loaded image
+            if let Some((img_width, img_height)) = image_size {
+                // Calculate scaling to fit the image in the available space
+                let available = ui.available_size();
+                let img_aspect = img_width as f32 / img_height as f32;
+                let available_aspect = available.x / available.y;
+
+                let (display_width, display_height) = if img_aspect > available_aspect {
+                    // Image is wider - fit to width
+                    let width = available.x;
+                    let height = width / img_aspect;
+                    (width, height)
+                } else {
+                    // Image is taller - fit to height
+                    let height = available.y;
+                    let width = height * img_aspect;
+                    (width, height)
+                };
+
+                // Center the image
+                let x_offset = (available.x - display_width) / 2.0;
+                let y_offset = (available.y - display_height) / 2.0;
+
+                let image_rect = egui::Rect::from_min_size(
+                    ui.min_rect().min + egui::vec2(x_offset, y_offset),
+                    egui::vec2(display_width, display_height),
+                );
+
+                // Draw the image
+                ui.painter().image(
+                    texture.id(),
+                    image_rect,
+                    egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                    egui::Color32::WHITE,
+                );
+
+                // TODO: Draw annotations on top of the image
+            }
+        } else if project.is_some() {
+            // Project loaded but no image texture (shouldn't happen normally)
             ui.centered_and_justified(|ui| {
                 ui.label(
-                    egui::RichText::new(format!(
-                        "Canvas: {} ({}x{})",
-                        proj.media_file, proj.frame_width, proj.frame_height
-                    ))
-                    .color(egui::Color32::WHITE),
+                    egui::RichText::new("Loading image...")
+                        .color(egui::Color32::WHITE),
                 );
             });
         } else {

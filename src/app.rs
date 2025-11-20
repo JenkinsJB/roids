@@ -31,6 +31,12 @@ pub struct RoidsApp {
 
     /// Whether a video file is loaded (shows timeline if true)
     is_video: bool,
+
+    /// Loaded image texture for display
+    image_texture: Option<egui::TextureHandle>,
+
+    /// Image dimensions (width, height)
+    image_size: Option<(u32, u32)>,
 }
 
 impl Default for RoidsApp {
@@ -47,6 +53,41 @@ impl RoidsApp {
             project: None,
             selected_annotation: None,
             is_video: false,
+            image_texture: None,
+            image_size: None,
+        }
+    }
+
+    /// Load an image file and create a texture for display.
+    pub fn load_image_file(&mut self, path: std::path::PathBuf, ctx: &egui::Context) {
+        match crate::io::media::load_image(&path) {
+            Ok(loaded_img) => {
+                // Create egui texture from the loaded image
+                let size = [loaded_img.width as usize, loaded_img.height as usize];
+                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &loaded_img.pixels);
+                let texture = ctx.load_texture(
+                    "loaded_image",
+                    color_image,
+                    egui::TextureOptions::LINEAR,
+                );
+
+                // Create project data
+                let project = ProjectData::new(
+                    path.to_string_lossy().to_string(),
+                    loaded_img.width,
+                    loaded_img.height,
+                );
+
+                self.image_texture = Some(texture);
+                self.image_size = Some((loaded_img.width, loaded_img.height));
+                self.project = Some(project);
+                self.is_video = false;
+
+                log::info!("Loaded image: {} ({}x{})", path.display(), loaded_img.width, loaded_img.height);
+            }
+            Err(e) => {
+                log::error!("Failed to load image {}: {}", path.display(), e);
+            }
         }
     }
 }
@@ -58,7 +99,13 @@ impl eframe::App for RoidsApp {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
                     if ui.button("Open Image/Video...").clicked() {
-                        // TODO: Implement file open dialog
+                        // Open native file picker
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("Images", &["jpg", "jpeg", "png", "bmp", "tiff", "tif"])
+                            .pick_file()
+                        {
+                            self.load_image_file(path, ctx);
+                        }
                         ui.close_menu();
                     }
                     if ui.button("Save Project...").clicked() {
@@ -123,7 +170,13 @@ impl eframe::App for RoidsApp {
 
         // Main canvas (center)
         egui::CentralPanel::default().show(ctx, |ui| {
-            canvas::show(ui, &self.project, self.current_tool);
+            canvas::show(
+                ui,
+                &self.project,
+                self.current_tool,
+                &self.image_texture,
+                self.image_size,
+            );
         });
     }
 }
