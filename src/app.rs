@@ -103,6 +103,77 @@ impl RoidsApp {
         self.in_progress_annotation = None;
     }
 
+    /// Export annotations to a file.
+    fn export_annotations(&self, path: std::path::PathBuf) {
+        if let Some(ref project) = self.project {
+            let extension = path.extension().and_then(|s| s.to_str());
+            let result = match extension {
+                Some("yaml") | Some("yml") => crate::io::serialization::export_yaml(project, &path),
+                Some("json") => crate::io::serialization::export_json(project, &path),
+                _ => {
+                    log::error!("Unsupported file extension: {:?}", extension);
+                    return;
+                }
+            };
+
+            match result {
+                Ok(_) => log::info!("Exported annotations to {}", path.display()),
+                Err(e) => log::error!("Failed to export annotations: {}", e),
+            }
+        }
+    }
+
+    /// Import annotations from a file and load the associated image.
+    fn import_annotations(&mut self, path: std::path::PathBuf, ctx: &egui::Context) {
+        let extension = path.extension().and_then(|s| s.to_str());
+        let result = match extension {
+            Some("yaml") | Some("yml") => crate::io::serialization::import_yaml(&path),
+            Some("json") => crate::io::serialization::import_json(&path),
+            _ => {
+                log::error!("Unsupported file extension: {:?}", extension);
+                return;
+            }
+        };
+
+        match result {
+            Ok(project_data) => {
+                log::info!("Imported {} annotations from {}",
+                    project_data.annotations.len(), path.display());
+
+                // Try to load the referenced image file
+                let image_path = std::path::PathBuf::from(&project_data.media_file);
+                if image_path.exists() {
+                    match crate::io::media::load_image(&image_path) {
+                        Ok(loaded_img) => {
+                            // Create egui texture from the loaded image
+                            let size = [loaded_img.width as usize, loaded_img.height as usize];
+                            let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &loaded_img.pixels);
+                            let texture = ctx.load_texture(
+                                "loaded_image",
+                                color_image,
+                                egui::TextureOptions::LINEAR,
+                            );
+
+                            self.image_texture = Some(texture);
+                            self.image_size = Some((loaded_img.width, loaded_img.height));
+                            log::info!("Loaded image: {}", image_path.display());
+                        }
+                        Err(e) => {
+                            log::error!("Failed to load image {}: {}", image_path.display(), e);
+                        }
+                    }
+                } else {
+                    log::warn!("Referenced image not found: {}", image_path.display());
+                }
+
+                // Update annotation counter based on loaded annotations
+                self.annotation_counter = project_data.annotations.len();
+                self.project = Some(project_data);
+            }
+            Err(e) => log::error!("Failed to import annotations: {}", e),
+        }
+    }
+
     /// Load an image file and create a texture for display.
     pub fn load_image_file(&mut self, path: std::path::PathBuf, ctx: &egui::Context) {
         match crate::io::media::load_image(&path) {
@@ -153,14 +224,38 @@ impl eframe::App for RoidsApp {
                         }
                         ui.close_menu();
                     }
-                    if ui.button("Save Project...").clicked() {
-                        // TODO: Implement save dialog
+                    if ui.button("Load Annotations...").clicked() {
+                        if let Some(path) = rfd::FileDialog::new()
+                            .add_filter("Annotations", &["yaml", "yml", "json"])
+                            .pick_file()
+                        {
+                            self.import_annotations(path, ctx);
+                        }
                         ui.close_menu();
                     }
-                    if ui.button("Export Annotations...").clicked() {
-                        // TODO: Implement export dialog
-                        ui.close_menu();
-                    }
+                    ui.separator();
+                    ui.menu_button("Export Annotations", |ui| {
+                        if ui.button("Export as YAML...").clicked() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("YAML", &["yaml", "yml"])
+                                .set_file_name("annotations.yaml")
+                                .save_file()
+                            {
+                                self.export_annotations(path);
+                            }
+                            ui.close_menu();
+                        }
+                        if ui.button("Export as JSON...").clicked() {
+                            if let Some(path) = rfd::FileDialog::new()
+                                .add_filter("JSON", &["json"])
+                                .set_file_name("annotations.json")
+                                .save_file()
+                            {
+                                self.export_annotations(path);
+                            }
+                            ui.close_menu();
+                        }
+                    });
                     ui.separator();
                     if ui.button("Quit").clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
