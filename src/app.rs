@@ -7,7 +7,10 @@
 //! the egui::App trait, managing the overall application state and
 //! coordinating between different UI components and the data model.
 
-use crate::models::project::ProjectData;
+use crate::models::{
+    annotation::{Annotation, AnnotationType},
+    project::ProjectData,
+};
 use crate::ui::{canvas, properties, timeline, toolbar};
 
 /// Current drawing tool selection.
@@ -37,6 +40,12 @@ pub struct RoidsApp {
 
     /// Image dimensions (width, height)
     image_size: Option<(u32, u32)>,
+
+    /// In-progress annotation being drawn
+    in_progress_annotation: Option<Annotation>,
+
+    /// Counter for generating default annotation names
+    annotation_counter: usize,
 }
 
 impl Default for RoidsApp {
@@ -55,7 +64,43 @@ impl RoidsApp {
             is_video: false,
             image_texture: None,
             image_size: None,
+            in_progress_annotation: None,
+            annotation_counter: 0,
         }
+    }
+
+    /// Start a new annotation based on the current tool.
+    fn start_annotation(&mut self) {
+        let annotation_type = match self.current_tool {
+            Tool::Polygon => AnnotationType::Polygon,
+            Tool::Line => AnnotationType::Line,
+            Tool::Select => return, // Don't create annotations in select mode
+        };
+
+        let name = match annotation_type {
+            AnnotationType::Polygon => format!("region {}", self.annotation_counter + 1),
+            AnnotationType::Line => format!("line {}", self.annotation_counter + 1),
+        };
+
+        self.in_progress_annotation = Some(Annotation::new(name, annotation_type));
+    }
+
+    /// Finish the current in-progress annotation and add it to the project.
+    fn finish_annotation(&mut self) {
+        if let Some(annotation) = self.in_progress_annotation.take() {
+            if annotation.vertex_count() >= 2 {
+                if let Some(ref mut project) = self.project {
+                    project.annotations.push(annotation);
+                    self.annotation_counter += 1;
+                    log::info!("Added annotation, total: {}", project.annotations.len());
+                }
+            }
+        }
+    }
+
+    /// Cancel the current in-progress annotation.
+    fn cancel_annotation(&mut self) {
+        self.in_progress_annotation = None;
     }
 
     /// Load an image file and create a texture for display.
@@ -168,15 +213,49 @@ impl eframe::App for RoidsApp {
                 properties::show(ui, &self.project, self.selected_annotation);
             });
 
+        // Handle keyboard events
+        if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if self.current_tool == Tool::Line && self.in_progress_annotation.is_some() {
+                // Finish line on Escape
+                self.finish_annotation();
+            } else {
+                // Cancel annotation on Escape
+                self.cancel_annotation();
+            }
+        }
+
         // Main canvas (center)
-        egui::CentralPanel::default().show(ctx, |ui| {
+        let canvas_action = egui::CentralPanel::default().show(ctx, |ui| {
             canvas::show(
                 ui,
                 &self.project,
                 self.current_tool,
                 &self.image_texture,
                 self.image_size,
-            );
-        });
+                &self.in_progress_annotation,
+            )
+        }).inner;
+
+        // Handle canvas actions
+        match canvas_action {
+            canvas::CanvasAction::AddVertex(point) => {
+                // Start new annotation if none in progress
+                if self.in_progress_annotation.is_none() {
+                    self.start_annotation();
+                }
+
+                // Add vertex to in-progress annotation
+                if let Some(ref mut annotation) = self.in_progress_annotation {
+                    annotation.add_vertex(point);
+                    log::info!("Added vertex at ({:.3}, {:.3}), total vertices: {}",
+                        point.x, point.y, annotation.vertex_count());
+                }
+            }
+            canvas::CanvasAction::FinishAnnotation => {
+                // Finish the annotation (for double-click on polygon)
+                self.finish_annotation();
+            }
+            canvas::CanvasAction::None => {}
+        }
     }
 }

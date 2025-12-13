@@ -7,16 +7,25 @@
 //! images/videos and draw polygons and lines for region annotation.
 
 use crate::app::Tool;
-use crate::models::project::ProjectData;
+use crate::models::{annotation::{Annotation, Point}, project::ProjectData};
 
-/// Display the main canvas area.
+/// Result of canvas interaction.
+pub enum CanvasAction {
+    None,
+    AddVertex(Point),
+    FinishAnnotation,
+}
+
+/// Display the main canvas area and handle mouse interactions.
 pub fn show(
     ui: &mut egui::Ui,
     project: &Option<ProjectData>,
     current_tool: Tool,
     image_texture: &Option<egui::TextureHandle>,
     image_size: Option<(u32, u32)>,
-) {
+    in_progress_annotation: &Option<Annotation>,
+) -> CanvasAction {
+    let mut action = CanvasAction::None;
     // Set background color
     ui.style_mut().visuals.extreme_bg_color = egui::Color32::from_gray(40);
 
@@ -63,7 +72,43 @@ pub fn show(
                     egui::Color32::WHITE,
                 );
 
-                // TODO: Draw annotations on top of the image
+                // Handle mouse interactions for drawing tools
+                if current_tool != Tool::Select {
+                    let response = ui.allocate_rect(image_rect, egui::Sense::click());
+
+                    if response.clicked() {
+                        if let Some(pos) = response.interact_pointer_pos() {
+                            // Convert screen coordinates to normalized coordinates
+                            if image_rect.contains(pos) {
+                                let rel_x = (pos.x - image_rect.min.x) / display_width;
+                                let rel_y = (pos.y - image_rect.min.y) / display_height;
+                                action = CanvasAction::AddVertex(Point::new(
+                                    rel_x as f64,
+                                    rel_y as f64,
+                                ));
+                            }
+                        }
+                    }
+
+                    if response.double_clicked() && current_tool == Tool::Polygon {
+                        action = CanvasAction::FinishAnnotation;
+                    }
+                }
+
+                // Draw annotations on top of the image
+                let painter = ui.painter();
+
+                // Draw completed annotations
+                if let Some(proj) = project {
+                    for annotation in &proj.annotations {
+                        draw_annotation(painter, annotation, &image_rect, egui::Color32::YELLOW, false);
+                    }
+                }
+
+                // Draw in-progress annotation
+                if let Some(annotation) = in_progress_annotation {
+                    draw_annotation(painter, annotation, &image_rect, egui::Color32::LIGHT_BLUE, true);
+                }
             }
         } else if project.is_some() {
             // Project loaded but no image texture (shouldn't happen normally)
@@ -116,4 +161,61 @@ pub fn show(
             ui.label("No file loaded");
         }
     });
+
+    action
+}
+
+/// Draw an annotation on the canvas.
+fn draw_annotation(
+    painter: &egui::Painter,
+    annotation: &Annotation,
+    image_rect: &egui::Rect,
+    color: egui::Color32,
+    is_in_progress: bool,
+) {
+    let vertices = &annotation.vertices;
+    if vertices.is_empty() {
+        return;
+    }
+
+    // Convert normalized coordinates to screen coordinates
+    let screen_points: Vec<egui::Pos2> = vertices
+        .iter()
+        .map(|p| {
+            egui::pos2(
+                image_rect.min.x + (p.x as f32) * image_rect.width(),
+                image_rect.min.y + (p.y as f32) * image_rect.height(),
+            )
+        })
+        .collect();
+
+    // Draw lines connecting vertices
+    for i in 0..screen_points.len() {
+        let next_i = (i + 1) % screen_points.len();
+
+        // For in-progress annotations, don't connect last vertex back to first
+        if is_in_progress && next_i == 0 {
+            break;
+        }
+
+        // For closed polygons, draw all edges including back to first
+        if !is_in_progress || i < screen_points.len() - 1 {
+            painter.line_segment(
+                [screen_points[i], screen_points[next_i]],
+                egui::Stroke::new(2.0, color),
+            );
+        }
+    }
+
+    // Draw vertices as circles
+    let vertex_color = if is_in_progress {
+        egui::Color32::WHITE
+    } else {
+        color
+    };
+
+    for point in &screen_points {
+        painter.circle_filled(*point, 4.0, vertex_color);
+        painter.circle_stroke(*point, 4.0, egui::Stroke::new(1.0, egui::Color32::BLACK));
+    }
 }
