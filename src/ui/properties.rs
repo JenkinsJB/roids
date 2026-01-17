@@ -8,12 +8,20 @@
 
 use crate::models::project::ProjectData;
 
+/// Action from the properties panel.
+pub enum PropertiesAction {
+    None,
+    SelectAnnotation(usize),
+    DeleteAnnotation(usize),
+}
+
 /// Display the properties panel showing annotations and their details.
 pub fn show(
     ui: &mut egui::Ui,
-    project: &Option<ProjectData>,
+    project: &mut Option<ProjectData>,
     selected_annotation: Option<usize>,
-) {
+) -> PropertiesAction {
+    let mut action = PropertiesAction::None;
     ui.heading("Annotations");
     ui.separator();
 
@@ -47,7 +55,7 @@ pub fn show(
                         );
 
                         if ui.selectable_label(is_selected, label_text).clicked() {
-                            // TODO: Select this annotation
+                            action = PropertiesAction::SelectAnnotation(i);
                         }
                     });
 
@@ -58,7 +66,7 @@ pub fn show(
                             ui.label(format!("Vertices: {}", annotation.vertex_count()));
 
                             if ui.button("Delete").clicked() {
-                                // TODO: Delete annotation
+                                action = PropertiesAction::DeleteAnnotation(i);
                             }
                         });
                     }
@@ -81,17 +89,22 @@ pub fn show(
     // Properties section
     if let Some(idx) = selected_annotation {
         if let Some(proj) = project {
-            if let Some(annotation) = proj.annotations.get(idx) {
+            if let Some(annotation) = proj.annotations.get_mut(idx) {
                 ui.heading("Properties");
                 ui.separator();
 
-                ui.label(format!("Name: {}", annotation.name));
+                // Editable name
+                ui.horizontal(|ui| {
+                    ui.label("Name:");
+                    ui.text_edit_singleline(&mut annotation.name);
+                });
+
                 ui.label(format!("Type: {:?}", annotation.annotation_type));
                 ui.label(format!("Closed: {}", annotation.is_closed()));
                 ui.label(format!("Vertices: {}", annotation.vertex_count()));
-
-                // TODO: Add editable properties
             }
         }
     }
+
+    action
 }

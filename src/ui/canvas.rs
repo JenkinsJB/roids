@@ -14,6 +14,11 @@ pub enum CanvasAction {
     None,
     AddVertex(Point),
     FinishAnnotation,
+    SelectAnnotation(usize),
+    DeselectAnnotation,
+    StartDraggingVertex(usize, usize), // (annotation_index, vertex_index)
+    DragVertex(Point),
+    StopDragging,
 }
 
 /// Display the main canvas area and handle mouse interactions.
@@ -24,6 +29,8 @@ pub fn show(
     image_texture: &Option<egui::TextureHandle>,
     image_size: Option<(u32, u32)>,
     in_progress_annotation: &Option<Annotation>,
+    selected_annotation: Option<usize>,
+    dragging_vertex: Option<(usize, usize)>,
 ) -> CanvasAction {
     let mut action = CanvasAction::None;
     // Set background color
@@ -72,13 +79,55 @@ pub fn show(
                     egui::Color32::WHITE,
                 );
 
-                // Handle mouse interactions for drawing tools
-                if current_tool != Tool::Select {
-                    let response = ui.allocate_rect(image_rect, egui::Sense::click());
+                // Handle mouse interactions
+                let response = ui.allocate_rect(image_rect, egui::Sense::click_and_drag());
 
+                if current_tool == Tool::Select {
+                    // Select mode: handle annotation/vertex selection and dragging
+                    if let Some(pos) = response.interact_pointer_pos() {
+                        if image_rect.contains(pos) {
+                            let rel_x = (pos.x - image_rect.min.x) / display_width;
+                            let rel_y = (pos.y - image_rect.min.y) / display_height;
+                            let click_point = Point::new(rel_x as f64, rel_y as f64);
+
+                            if response.drag_started() {
+                                // Check if clicking on a vertex
+                                if let Some(proj) = project {
+                                    for (ann_idx, annotation) in proj.annotations.iter().enumerate() {
+                                        if let Some(vertex_idx) = annotation.find_vertex_within_threshold(&click_point, 0.02) {
+                                            action = CanvasAction::StartDraggingVertex(ann_idx, vertex_idx);
+                                            break;
+                                        }
+                                    }
+                                }
+                            } else if response.dragged() && dragging_vertex.is_some() {
+                                // Continue dragging
+                                action = CanvasAction::DragVertex(click_point);
+                            } else if response.drag_stopped() {
+                                action = CanvasAction::StopDragging;
+                            } else if response.clicked() {
+                                // Not dragging, just clicking - select annotation or deselect
+                                let mut found_annotation = false;
+                                if let Some(proj) = project {
+                                    for (ann_idx, annotation) in proj.annotations.iter().enumerate() {
+                                        if let Some(_) = annotation.find_vertex_within_threshold(&click_point, 0.02) {
+                                            action = CanvasAction::SelectAnnotation(ann_idx);
+                                            found_annotation = true;
+                                            break;
+                                        }
+                                    }
+                                }
+                                // If clicked on image but not on any annotation, deselect
+                                if !found_annotation {
+                                    action = CanvasAction::DeselectAnnotation;
+                                }
+                            }
+                        }
+                    }
+                } else {
+                    // Drawing mode: add vertices
                     if response.clicked() {
                         if let Some(pos) = response.interact_pointer_pos() {
-                            // Convert screen coordinates to normalized coordinates
                             if image_rect.contains(pos) {
                                 let rel_x = (pos.x - image_rect.min.x) / display_width;
                                 let rel_y = (pos.y - image_rect.min.y) / display_height;
@@ -100,14 +149,20 @@ pub fn show(
 
                 // Draw completed annotations
                 if let Some(proj) = project {
-                    for annotation in &proj.annotations {
-                        draw_annotation(painter, annotation, &image_rect, egui::Color32::YELLOW, false);
+                    for (idx, annotation) in proj.annotations.iter().enumerate() {
+                        let is_selected = selected_annotation == Some(idx);
+                        let color = if is_selected {
+                            egui::Color32::from_rgb(0, 255, 0) // Green for selected
+                        } else {
+                            egui::Color32::YELLOW
+                        };
+                        draw_annotation(painter, annotation, &image_rect, color, false, is_selected);
                     }
                 }
 
                 // Draw in-progress annotation
                 if let Some(annotation) = in_progress_annotation {
-                    draw_annotation(painter, annotation, &image_rect, egui::Color32::LIGHT_BLUE, true);
+                    draw_annotation(painter, annotation, &image_rect, egui::Color32::LIGHT_BLUE, true, false);
                 }
             }
         } else if project.is_some() {
@@ -172,6 +227,7 @@ fn draw_annotation(
     image_rect: &egui::Rect,
     color: egui::Color32,
     is_in_progress: bool,
+    show_coordinates: bool,
 ) {
     let vertices = &annotation.vertices;
     if vertices.is_empty() {
@@ -214,8 +270,49 @@ fn draw_annotation(
         color
     };
 
-    for point in &screen_points {
+    for (i, point) in screen_points.iter().enumerate() {
         painter.circle_filled(*point, 4.0, vertex_color);
         painter.circle_stroke(*point, 4.0, egui::Stroke::new(1.0, egui::Color32::BLACK));
+
+        // Draw coordinate labels for selected annotations
+        if show_coordinates {
+            let vertex = &vertices[i];
+            let label_text = format!("{:.3}, {:.3}", vertex.x, vertex.y);
+
+            // Calculate text size and position
+            let font_id = egui::FontId::proportional(12.0);
+            let galley = painter.layout_no_wrap(
+                label_text.clone(),
+                font_id,
+                egui::Color32::BLACK,
+            );
+
+            // Position label offset from vertex (to the right and slightly down)
+            let label_pos = egui::pos2(point.x + 8.0, point.y + 8.0);
+
+            // Draw background rectangle with padding
+            let padding = egui::vec2(4.0, 2.0);
+            let bg_rect = egui::Rect::from_min_size(
+                label_pos - padding,
+                galley.size() + padding * 2.0,
+            );
+
+            // Draw light background
+            painter.rect_filled(
+                bg_rect,
+                2.0,
+                egui::Color32::from_rgba_premultiplied(240, 240, 240, 230),
+            );
+
+            // Draw border
+            painter.rect_stroke(
+                bg_rect,
+                2.0,
+                egui::Stroke::new(1.0, egui::Color32::BLACK),
+            );
+
+            // Draw text
+            painter.galley(label_pos, galley, egui::Color32::BLACK);
+        }
     }
 }

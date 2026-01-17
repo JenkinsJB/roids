@@ -46,6 +46,9 @@ pub struct RoidsApp {
 
     /// Counter for generating default annotation names
     annotation_counter: usize,
+
+    /// Currently dragged vertex (annotation_index, vertex_index)
+    dragging_vertex: Option<(usize, usize)>,
 }
 
 impl Default for RoidsApp {
@@ -66,6 +69,7 @@ impl RoidsApp {
             image_size: None,
             in_progress_annotation: None,
             annotation_counter: 0,
+            dragging_vertex: None,
         }
     }
 
@@ -302,11 +306,28 @@ impl eframe::App for RoidsApp {
         }
 
         // Properties panel (right side)
-        egui::SidePanel::right("properties")
+        let properties_action = egui::SidePanel::right("properties")
             .default_width(250.0)
             .show(ctx, |ui| {
-                properties::show(ui, &self.project, self.selected_annotation);
-            });
+                properties::show(ui, &mut self.project, self.selected_annotation)
+            }).inner;
+
+        // Handle properties panel actions
+        match properties_action {
+            properties::PropertiesAction::SelectAnnotation(idx) => {
+                self.selected_annotation = Some(idx);
+            }
+            properties::PropertiesAction::DeleteAnnotation(idx) => {
+                if let Some(ref mut project) = self.project {
+                    if idx < project.annotations.len() {
+                        project.annotations.remove(idx);
+                        self.selected_annotation = None;
+                        log::info!("Deleted annotation from panel, total: {}", project.annotations.len());
+                    }
+                }
+            }
+            properties::PropertiesAction::None => {}
+        }
 
         // Handle keyboard events
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
@@ -314,8 +335,22 @@ impl eframe::App for RoidsApp {
                 // Finish line on Escape
                 self.finish_annotation();
             } else {
-                // Cancel annotation on Escape
+                // Cancel annotation on Escape or deselect
                 self.cancel_annotation();
+                self.selected_annotation = None;
+            }
+        }
+
+        // Handle Delete key to delete selected annotation
+        if ctx.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)) {
+            if let Some(idx) = self.selected_annotation {
+                if let Some(ref mut project) = self.project {
+                    if idx < project.annotations.len() {
+                        project.annotations.remove(idx);
+                        self.selected_annotation = None;
+                        log::info!("Deleted annotation, total: {}", project.annotations.len());
+                    }
+                }
             }
         }
 
@@ -328,6 +363,8 @@ impl eframe::App for RoidsApp {
                 &self.image_texture,
                 self.image_size,
                 &self.in_progress_annotation,
+                self.selected_annotation,
+                self.dragging_vertex,
             )
         }).inner;
 
@@ -349,6 +386,34 @@ impl eframe::App for RoidsApp {
             canvas::CanvasAction::FinishAnnotation => {
                 // Finish the annotation (for double-click on polygon)
                 self.finish_annotation();
+            }
+            canvas::CanvasAction::SelectAnnotation(idx) => {
+                self.selected_annotation = Some(idx);
+                log::info!("Selected annotation {}", idx);
+            }
+            canvas::CanvasAction::DeselectAnnotation => {
+                self.selected_annotation = None;
+                log::info!("Deselected annotation");
+            }
+            canvas::CanvasAction::StartDraggingVertex(ann_idx, vertex_idx) => {
+                self.dragging_vertex = Some((ann_idx, vertex_idx));
+                self.selected_annotation = Some(ann_idx);
+                log::info!("Started dragging vertex {} of annotation {}", vertex_idx, ann_idx);
+            }
+            canvas::CanvasAction::DragVertex(point) => {
+                if let Some((ann_idx, vertex_idx)) = self.dragging_vertex {
+                    if let Some(ref mut project) = self.project {
+                        if let Some(annotation) = project.annotations.get_mut(ann_idx) {
+                            annotation.update_vertex(vertex_idx, point);
+                        }
+                    }
+                }
+            }
+            canvas::CanvasAction::StopDragging => {
+                if let Some((ann_idx, vertex_idx)) = self.dragging_vertex {
+                    log::info!("Stopped dragging vertex {} of annotation {}", vertex_idx, ann_idx);
+                }
+                self.dragging_vertex = None;
             }
             canvas::CanvasAction::None => {}
         }
