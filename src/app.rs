@@ -342,13 +342,16 @@ impl eframe::App for RoidsApp {
         }
 
         // Handle Delete key to delete selected annotation
-        if ctx.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)) {
-            if let Some(idx) = self.selected_annotation {
-                if let Some(ref mut project) = self.project {
-                    if idx < project.annotations.len() {
-                        project.annotations.remove(idx);
-                        self.selected_annotation = None;
-                        log::info!("Deleted annotation, total: {}", project.annotations.len());
+        // Only process if no text field is focused (to avoid deleting while editing names)
+        if !ctx.wants_keyboard_input() {
+            if ctx.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)) {
+                if let Some(idx) = self.selected_annotation {
+                    if let Some(ref mut project) = self.project {
+                        if idx < project.annotations.len() {
+                            project.annotations.remove(idx);
+                            self.selected_annotation = None;
+                            log::info!("Deleted annotation, total: {}", project.annotations.len());
+                        }
                     }
                 }
             }
