@@ -12,6 +12,7 @@ use crate::models::{
     project::ProjectData,
 };
 use crate::ui::{canvas, properties, timeline, toolbar};
+use std::sync::mpsc::{channel, Receiver};
 
 /// History system for undo/redo functionality.
 struct History {
@@ -88,6 +89,14 @@ pub enum Tool {
     Line,
 }
 
+/// Result of background image loading operation.
+struct LoadedImageData {
+    width: u32,
+    height: u32,
+    pixels: Vec<u8>,
+    project: Option<ProjectData>,
+}
+
 /// Main application state.
 pub struct RoidsApp {
     /// Currently selected drawing tool
@@ -119,6 +128,12 @@ pub struct RoidsApp {
 
     /// History for undo/redo
     history: History,
+
+    /// Receiver for background image loading
+    image_loader: Option<Receiver<Result<LoadedImageData, String>>>,
+
+    /// Loading state message
+    loading_message: Option<String>,
 }
 
 impl Default for RoidsApp {
@@ -141,6 +156,8 @@ impl RoidsApp {
             annotation_counter: 0,
             dragging_vertex: None,
             history: History::new(),
+            image_loader: None,
+            loading_message: None,
         }
     }
 
@@ -213,93 +230,130 @@ impl RoidsApp {
         }
     }
 
-    /// Import annotations from a file and load the associated image.
-    fn import_annotations(&mut self, path: std::path::PathBuf, ctx: &egui::Context) {
-        let extension = path.extension().and_then(|s| s.to_str());
-        let result = match extension {
-            Some("yaml") | Some("yml") => crate::io::serialization::import_yaml(&path),
-            Some("json") => crate::io::serialization::import_json(&path),
-            _ => {
-                log::error!("Unsupported file extension: {:?}", extension);
-                return;
-            }
-        };
+    /// Import annotations from a file and load the associated image (asynchronously).
+    fn import_annotations(&mut self, path: std::path::PathBuf, _ctx: &egui::Context) {
+        let (sender, receiver) = channel();
+        self.image_loader = Some(receiver);
+        self.loading_message = Some("Loading annotations and image...".to_string());
 
-        match result {
-            Ok(project_data) => {
+        // Spawn background thread for loading
+        std::thread::spawn(move || {
+            let result = (|| -> Result<LoadedImageData, String> {
+                // Parse annotation file
+                let extension = path.extension().and_then(|s| s.to_str());
+                let project_data = match extension {
+                    Some("yaml") | Some("yml") => crate::io::serialization::import_yaml(&path)
+                        .map_err(|e| format!("Failed to import YAML: {}", e))?,
+                    Some("json") => crate::io::serialization::import_json(&path)
+                        .map_err(|e| format!("Failed to import JSON: {}", e))?,
+                    _ => return Err(format!("Unsupported file extension: {:?}", extension)),
+                };
+
                 log::info!("Imported {} annotations from {}",
                     project_data.annotations.len(), path.display());
 
-                // Try to load the referenced image file
+                // Load the referenced image file
                 let image_path = std::path::PathBuf::from(&project_data.media_file);
-                if image_path.exists() {
-                    match crate::io::media::load_image(&image_path) {
-                        Ok(loaded_img) => {
-                            // Create egui texture from the loaded image
-                            let size = [loaded_img.width as usize, loaded_img.height as usize];
-                            let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &loaded_img.pixels);
-                            let texture = ctx.load_texture(
-                                "loaded_image",
-                                color_image,
-                                egui::TextureOptions::LINEAR,
-                            );
-
-                            self.image_texture = Some(texture);
-                            self.image_size = Some((loaded_img.width, loaded_img.height));
-                            log::info!("Loaded image: {}", image_path.display());
-                        }
-                        Err(e) => {
-                            log::error!("Failed to load image {}: {}", image_path.display(), e);
-                        }
-                    }
-                } else {
-                    log::warn!("Referenced image not found: {}", image_path.display());
+                if !image_path.exists() {
+                    return Err(format!("Referenced image not found: {}", image_path.display()));
                 }
 
-                // Update annotation counter based on loaded annotations
-                self.annotation_counter = project_data.annotations.len();
-                self.project = Some(project_data);
-            }
-            Err(e) => log::error!("Failed to import annotations: {}", e),
-        }
+                let loaded_img = crate::io::media::load_image(&image_path)
+                    .map_err(|e| format!("Failed to load image: {}", e))?;
+
+                log::info!("Loaded image: {}", image_path.display());
+
+                Ok(LoadedImageData {
+                    width: loaded_img.width,
+                    height: loaded_img.height,
+                    pixels: loaded_img.pixels,
+                    project: Some(project_data),
+                })
+            })();
+
+            let _ = sender.send(result);
+        });
     }
 
-    /// Load an image file and create a texture for display.
-    pub fn load_image_file(&mut self, path: std::path::PathBuf, ctx: &egui::Context) {
-        match crate::io::media::load_image(&path) {
-            Ok(loaded_img) => {
-                // Create egui texture from the loaded image
-                let size = [loaded_img.width as usize, loaded_img.height as usize];
-                let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &loaded_img.pixels);
-                let texture = ctx.load_texture(
-                    "loaded_image",
-                    color_image,
-                    egui::TextureOptions::LINEAR,
-                );
+    /// Load an image file and create a texture for display (asynchronously).
+    pub fn load_image_file(&mut self, path: std::path::PathBuf, _ctx: &egui::Context) {
+        let (sender, receiver) = channel();
+        self.image_loader = Some(receiver);
+        self.loading_message = Some("Loading image...".to_string());
+
+        let path_string = path.to_string_lossy().to_string();
+
+        // Spawn background thread for loading
+        std::thread::spawn(move || {
+            let result = (|| -> Result<LoadedImageData, String> {
+                let loaded_img = crate::io::media::load_image(&path)
+                    .map_err(|e| format!("Failed to load image: {}", e))?;
+
+                log::info!("Loaded image: {} ({}x{})", path.display(), loaded_img.width, loaded_img.height);
 
                 // Create project data
                 let project = ProjectData::new(
-                    path.to_string_lossy().to_string(),
+                    path_string,
                     loaded_img.width,
                     loaded_img.height,
                 );
 
-                self.image_texture = Some(texture);
-                self.image_size = Some((loaded_img.width, loaded_img.height));
-                self.project = Some(project);
-                self.is_video = false;
+                Ok(LoadedImageData {
+                    width: loaded_img.width,
+                    height: loaded_img.height,
+                    pixels: loaded_img.pixels,
+                    project: Some(project),
+                })
+            })();
 
-                log::info!("Loaded image: {} ({}x{})", path.display(), loaded_img.width, loaded_img.height);
-            }
-            Err(e) => {
-                log::error!("Failed to load image {}: {}", path.display(), e);
-            }
-        }
+            let _ = sender.send(result);
+        });
     }
 }
 
 impl eframe::App for RoidsApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Check for completed image loading
+        if let Some(ref receiver) = self.image_loader {
+            if let Ok(result) = receiver.try_recv() {
+                self.image_loader = None;
+                self.loading_message = None;
+
+                match result {
+                    Ok(loaded_data) => {
+                        // Create egui texture from the loaded image data
+                        let size = [loaded_data.width as usize, loaded_data.height as usize];
+                        let color_image = egui::ColorImage::from_rgba_unmultiplied(size, &loaded_data.pixels);
+                        let texture = ctx.load_texture(
+                            "loaded_image",
+                            color_image,
+                            egui::TextureOptions::LINEAR,
+                        );
+
+                        self.image_texture = Some(texture);
+                        self.image_size = Some((loaded_data.width, loaded_data.height));
+                        self.is_video = false;
+
+                        if let Some(project) = loaded_data.project {
+                            // Update annotation counter based on loaded annotations
+                            self.annotation_counter = project.annotations.len();
+                            self.project = Some(project);
+                        }
+
+                        log::info!("Image loaded successfully");
+                    }
+                    Err(e) => {
+                        log::error!("Failed to load image: {}", e);
+                    }
+                }
+            }
+        }
+
+        // Request repaint if still loading (to update spinner)
+        if self.loading_message.is_some() {
+            ctx.request_repaint();
+        }
+
         // Top menu bar
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
@@ -549,16 +603,33 @@ impl eframe::App for RoidsApp {
 
         // Main canvas (center)
         let canvas_action = egui::CentralPanel::default().show(ctx, |ui| {
-            canvas::show(
-                ui,
-                &self.project,
-                self.current_tool,
-                &self.image_texture,
-                self.image_size,
-                &self.in_progress_annotation,
-                self.selected_annotation,
-                self.dragging_vertex,
-            )
+            // Show loading overlay if loading
+            if let Some(ref message) = self.loading_message {
+                ui.centered_and_justified(|ui| {
+                    ui.vertical_centered(|ui| {
+                        ui.add_space(20.0);
+                        ui.spinner();
+                        ui.add_space(10.0);
+                        ui.label(
+                            egui::RichText::new(message)
+                                .size(16.0)
+                                .color(egui::Color32::from_gray(200)),
+                        );
+                    });
+                });
+                canvas::CanvasAction::None
+            } else {
+                canvas::show(
+                    ui,
+                    &self.project,
+                    self.current_tool,
+                    &self.image_texture,
+                    self.image_size,
+                    &self.in_progress_annotation,
+                    self.selected_annotation,
+                    self.dragging_vertex,
+                )
+            }
         }).inner;
 
         // Handle canvas actions
