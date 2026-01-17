@@ -13,6 +13,73 @@ use crate::models::{
 };
 use crate::ui::{canvas, properties, timeline, toolbar};
 
+/// History system for undo/redo functionality.
+struct History {
+    /// Undo stack (past states)
+    undo_stack: Vec<Vec<Annotation>>,
+    /// Redo stack (future states after undo)
+    redo_stack: Vec<Vec<Annotation>>,
+    /// Maximum history size
+    max_size: usize,
+}
+
+impl History {
+    fn new() -> Self {
+        Self {
+            undo_stack: Vec::new(),
+            redo_stack: Vec::new(),
+            max_size: 50, // Keep last 50 states
+        }
+    }
+
+    /// Save current state before making a change
+    fn push(&mut self, annotations: Vec<Annotation>) {
+        self.undo_stack.push(annotations);
+        // Limit history size
+        if self.undo_stack.len() > self.max_size {
+            self.undo_stack.remove(0);
+        }
+        // Clear redo stack when new action is performed
+        self.redo_stack.clear();
+    }
+
+    /// Undo: restore previous state
+    fn undo(&mut self, current: Vec<Annotation>) -> Option<Vec<Annotation>> {
+        if let Some(previous) = self.undo_stack.pop() {
+            self.redo_stack.push(current);
+            Some(previous)
+        } else {
+            None
+        }
+    }
+
+    /// Redo: restore next state
+    fn redo(&mut self, current: Vec<Annotation>) -> Option<Vec<Annotation>> {
+        if let Some(next) = self.redo_stack.pop() {
+            self.undo_stack.push(current);
+            Some(next)
+        } else {
+            None
+        }
+    }
+
+    /// Check if undo is available
+    fn can_undo(&self) -> bool {
+        !self.undo_stack.is_empty()
+    }
+
+    /// Check if redo is available
+    fn can_redo(&self) -> bool {
+        !self.redo_stack.is_empty()
+    }
+
+    /// Clear all history
+    fn clear(&mut self) {
+        self.undo_stack.clear();
+        self.redo_stack.clear();
+    }
+}
+
 /// Current drawing tool selection.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tool {
@@ -49,6 +116,9 @@ pub struct RoidsApp {
 
     /// Currently dragged vertex (annotation_index, vertex_index)
     dragging_vertex: Option<(usize, usize)>,
+
+    /// History for undo/redo
+    history: History,
 }
 
 impl Default for RoidsApp {
@@ -70,7 +140,13 @@ impl RoidsApp {
             in_progress_annotation: None,
             annotation_counter: 0,
             dragging_vertex: None,
+            history: History::new(),
         }
+    }
+
+    /// Save annotations to history before making a change
+    fn save_to_history(&mut self, annotations: &[Annotation]) {
+        self.history.push(annotations.to_vec());
     }
 
     /// Start a new annotation based on the current tool.
@@ -93,6 +169,16 @@ impl RoidsApp {
     fn finish_annotation(&mut self) {
         if let Some(annotation) = self.in_progress_annotation.take() {
             if annotation.vertex_count() >= 2 {
+                // Clone annotations for history
+                let annotations_clone = self.project.as_ref()
+                    .map(|p| p.annotations.clone());
+
+                // Save to history before making changes
+                if let Some(annotations) = annotations_clone {
+                    self.save_to_history(&annotations);
+                }
+
+                // Now mutably borrow and make changes
                 if let Some(ref mut project) = self.project {
                     project.annotations.push(annotation);
                     self.annotation_counter += 1;
@@ -267,8 +353,59 @@ impl eframe::App for RoidsApp {
                 });
 
                 ui.menu_button("Edit", |ui| {
-                    if ui.button("Delete Selected").clicked() {
-                        // TODO: Implement delete
+                    // Undo
+                    let can_undo = self.history.can_undo();
+                    if ui.add_enabled(can_undo, egui::Button::new("Undo (Ctrl+Z)")).clicked() {
+                        if let Some(ref mut project) = self.project {
+                            let current = project.annotations.clone();
+                            if let Some(previous) = self.history.undo(current) {
+                                project.annotations = previous;
+                                self.selected_annotation = None;
+                                log::info!("Undo from menu");
+                            }
+                        }
+                        ui.close_menu();
+                    }
+
+                    // Redo
+                    let can_redo = self.history.can_redo();
+                    if ui.add_enabled(can_redo, egui::Button::new("Redo (Ctrl+Shift+Z)")).clicked() {
+                        if let Some(ref mut project) = self.project {
+                            let current = project.annotations.clone();
+                            if let Some(next) = self.history.redo(current) {
+                                project.annotations = next;
+                                self.selected_annotation = None;
+                                log::info!("Redo from menu");
+                            }
+                        }
+                        ui.close_menu();
+                    }
+
+                    ui.separator();
+
+                    // Delete Selected
+                    let has_selection = self.selected_annotation.is_some();
+                    if ui.add_enabled(has_selection, egui::Button::new("Delete Selected")).clicked() {
+                        if let Some(idx) = self.selected_annotation {
+                            // Clone annotations for history
+                            let annotations_clone = self.project.as_ref()
+                                .filter(|p| idx < p.annotations.len())
+                                .map(|p| p.annotations.clone());
+
+                            // Save to history before making changes
+                            if let Some(annotations) = annotations_clone {
+                                self.save_to_history(&annotations);
+                            }
+
+                            // Now mutably borrow and make changes
+                            if let Some(ref mut project) = self.project {
+                                if idx < project.annotations.len() {
+                                    project.annotations.remove(idx);
+                                    self.selected_annotation = None;
+                                    log::info!("Deleted annotation from menu, total: {}", project.annotations.len());
+                                }
+                            }
+                        }
                         ui.close_menu();
                     }
                 });
@@ -318,6 +455,17 @@ impl eframe::App for RoidsApp {
                 self.selected_annotation = Some(idx);
             }
             properties::PropertiesAction::DeleteAnnotation(idx) => {
+                // Clone annotations for history
+                let annotations_clone = self.project.as_ref()
+                    .filter(|p| idx < p.annotations.len())
+                    .map(|p| p.annotations.clone());
+
+                // Save to history before making changes
+                if let Some(annotations) = annotations_clone {
+                    self.save_to_history(&annotations);
+                }
+
+                // Now mutably borrow and make changes
                 if let Some(ref mut project) = self.project {
                     if idx < project.annotations.len() {
                         project.annotations.remove(idx);
@@ -346,11 +494,53 @@ impl eframe::App for RoidsApp {
         if !ctx.wants_keyboard_input() {
             if ctx.input(|i| i.key_pressed(egui::Key::Delete) || i.key_pressed(egui::Key::Backspace)) {
                 if let Some(idx) = self.selected_annotation {
+                    // Clone annotations for history
+                    let annotations_clone = self.project.as_ref()
+                        .filter(|p| idx < p.annotations.len())
+                        .map(|p| p.annotations.clone());
+
+                    // Save to history before making changes
+                    if let Some(annotations) = annotations_clone {
+                        self.save_to_history(&annotations);
+                    }
+
+                    // Now mutably borrow and make changes
                     if let Some(ref mut project) = self.project {
                         if idx < project.annotations.len() {
                             project.annotations.remove(idx);
                             self.selected_annotation = None;
                             log::info!("Deleted annotation, total: {}", project.annotations.len());
+                        }
+                    }
+                }
+            }
+
+            // Handle undo (Ctrl+Z)
+            if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::Z) && !i.modifiers.shift) {
+                if self.history.can_undo() {
+                    if let Some(ref mut project) = self.project {
+                        let current = project.annotations.clone();
+                        if let Some(previous) = self.history.undo(current) {
+                            project.annotations = previous;
+                            self.selected_annotation = None;
+                            log::info!("Undo");
+                        }
+                    }
+                }
+            }
+
+            // Handle redo (Ctrl+Shift+Z or Ctrl+Y)
+            if ctx.input(|i| {
+                (i.modifiers.command && i.modifiers.shift && i.key_pressed(egui::Key::Z)) ||
+                (i.modifiers.command && i.key_pressed(egui::Key::Y))
+            }) {
+                if self.history.can_redo() {
+                    if let Some(ref mut project) = self.project {
+                        let current = project.annotations.clone();
+                        if let Some(next) = self.history.redo(current) {
+                            project.annotations = next;
+                            self.selected_annotation = None;
+                            log::info!("Redo");
                         }
                     }
                 }
@@ -399,6 +589,15 @@ impl eframe::App for RoidsApp {
                 log::info!("Deselected annotation");
             }
             canvas::CanvasAction::StartDraggingVertex(ann_idx, vertex_idx) => {
+                // Clone annotations for history
+                let annotations_clone = self.project.as_ref()
+                    .map(|p| p.annotations.clone());
+
+                // Save to history before starting drag
+                if let Some(annotations) = annotations_clone {
+                    self.save_to_history(&annotations);
+                }
+
                 self.dragging_vertex = Some((ann_idx, vertex_idx));
                 self.selected_annotation = Some(ann_idx);
                 log::info!("Started dragging vertex {} of annotation {}", vertex_idx, ann_idx);
