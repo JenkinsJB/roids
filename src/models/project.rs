@@ -15,8 +15,6 @@ pub struct ProjectData {
     pub media_file: String,
     pub frame_width: u32,
     pub frame_height: u32,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub frame_number: Option<u32>,
     pub annotations: Vec<Annotation>,
 }
 
@@ -27,7 +25,6 @@ impl ProjectData {
             media_file,
             frame_width,
             frame_height,
-            frame_number: None,
             annotations: Vec::new(),
         }
     }

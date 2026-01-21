@@ -11,7 +11,7 @@ use crate::models::{
     annotation::{Annotation, AnnotationType},
     project::ProjectData,
 };
-use crate::ui::{canvas, properties, timeline, toolbar};
+use crate::ui::{canvas, properties, toolbar};
 use std::sync::mpsc::{channel, Receiver};
 
 /// History system for undo/redo functionality.
@@ -108,9 +108,6 @@ pub struct RoidsApp {
     /// Index of currently selected annotation
     selected_annotation: Option<usize>,
 
-    /// Whether a video file is loaded (shows timeline if true)
-    is_video: bool,
-
     /// Loaded image texture for display
     image_texture: Option<egui::TextureHandle>,
 
@@ -149,7 +146,6 @@ impl RoidsApp {
             current_tool: Tool::Select,
             project: None,
             selected_annotation: None,
-            is_video: false,
             image_texture: None,
             image_size: None,
             in_progress_annotation: None,
@@ -332,7 +328,6 @@ impl eframe::App for RoidsApp {
 
                         self.image_texture = Some(texture);
                         self.image_size = Some((loaded_data.width, loaded_data.height));
-                        self.is_video = false;
 
                         if let Some(project) = loaded_data.project {
                             // Update annotation counter based on loaded annotations
@@ -358,7 +353,7 @@ impl eframe::App for RoidsApp {
         egui::TopBottomPanel::top("menu_bar").show(ctx, |ui| {
             egui::menu::bar(ui, |ui| {
                 ui.menu_button("File", |ui| {
-                    if ui.button("Open Image/Video...").clicked() {
+                    if ui.button("Open Image...").clicked() {
                         // Open native file picker
                         if let Some(path) = rfd::FileDialog::new()
                             .add_filter("Images", &["jpg", "jpeg", "png", "bmp", "tiff", "tif"])
@@ -488,13 +483,6 @@ impl eframe::App for RoidsApp {
         egui::TopBottomPanel::top("toolbar").show(ctx, |ui| {
             toolbar::show(ui, &mut self.current_tool);
         });
-
-        // Timeline (only shown for video files)
-        if self.is_video {
-            egui::TopBottomPanel::bottom("timeline").show(ctx, |ui| {
-                timeline::show(ui);
-            });
-        }
 
         // Properties panel (right side)
         let properties_action = egui::SidePanel::right("properties")

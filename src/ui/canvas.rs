@@ -1,10 +1,10 @@
 // Copyright (c) 2025, Jason Jenkins
 // SPDX-License-Identifier: BSD-3-Clause
 
-//! Drawing canvas for image/video display and annotation.
+//! Drawing canvas for image display and annotation.
 //!
 //! This module provides the main canvas area where users can view
-//! images/videos and draw polygons and lines for region annotation.
+//! images and draw polygons and lines for region annotation.
 
 use crate::app::Tool;
 use crate::models::{annotation::{Annotation, Point}, project::ProjectData};
@@ -190,12 +190,12 @@ pub fn show(
                     );
                     ui.add_space(20.0);
                     ui.label(
-                        egui::RichText::new("Open an image or video to begin annotating")
+                        egui::RichText::new("Open an image to begin annotating")
                             .color(egui::Color32::from_gray(180)),
                     );
                     ui.add_space(10.0);
                     ui.label(
-                        egui::RichText::new("File → Open Image/Video...")
+                        egui::RichText::new("File → Open Image...")
                             .weak()
                             .color(egui::Color32::from_gray(130)),
                     );

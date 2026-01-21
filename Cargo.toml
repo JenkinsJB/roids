@@ -4,10 +4,10 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Jason Jenkins"]
 license = "BSD-3-Clause"
-description = "Region Of Interest Designation System - A tool for annotating images and videos"
+description = "Region Of Interest Designation System - A tool for annotating images"
 repository = "https://github.com/yourusername/roids"
 keywords = ["computer-vision", "annotation", "roi", "image-processing"]
-categories = ["multimedia::video", "graphics"]
+categories = ["graphics"]
 
 [dependencies]
 # GUI framework
@@ -18,10 +18,6 @@ rfd = "0.14"         # Native file dialogs (rusty file dialogs)
 # Image handling
 image = "0.25"       # Image loading and manipulation
 
-# Video processing (choose one based on testing)
-opencv = { version = "0.92", optional = true }  # OpenCV bindings (comprehensive but large)
-# ffmpeg-next = { version = "7.0", optional = true }  # FFmpeg bindings (lighter weight)
-
 # Data serialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -31,8 +27,3 @@ serde_yaml = "0.9"
 anyhow = "1.0"       # Error handling
 log = "0.4"          # Logging facade
 env_logger = "0.11"  # Simple logger implementation
-
-[features]
-default = []  # Start without video support for MVP
-video-opencv = ["opencv"]
-# video-ffmpeg = ["ffmpeg"]

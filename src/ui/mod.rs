@@ -5,5 +5,4 @@
 
 pub mod canvas;
 pub mod properties;
-pub mod timeline;
 pub mod toolbar;

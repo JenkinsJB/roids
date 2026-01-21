@@ -5,12 +5,14 @@
 
 * Project Overview
 
-ROIDS (Region Of Interest Designation System) is a cross-platform native desktop application designed to help users define polygons and lines on images and video frames. These geometric annotations serve as configuration inputs for computer vision systems that count people or other objects within designated regions or crossing specified lines.
+ROIDS (Region Of Interest Designation System) is a cross-platform native desktop application designed to help users define polygons and lines on images. These geometric annotations serve as configuration inputs for computer vision systems that count people or other objects within designated regions or crossing specified lines.
+
+*Note: Video support has been deferred to a future version. The current MVP focuses on image annotation only.*
 
 ** Purpose
 
 The application enables users to:
-- Visually define regions of interest (polygons) and counting lines on media files
+- Visually define regions of interest (polygons) and counting lines on images
 - Export geometric data in a normalized, machine-readable format
 - Iterate on configurations by reloading and editing previous work
 
@@ -42,7 +44,6 @@ All project dependencies use permissive licenses compatible with BSD 3-Clause:
 | Dependency Type | Licenses | Compatibility |
 |-----------------+----------+---------------|
 | Rust crates | MIT, Apache-2.0 | ✓ Fully compatible |
-| OpenCV library | Apache-2.0 | ✓ Compatible (dynamic linking) |
 
 ** Open Source Requirements
 
@@ -56,13 +57,14 @@ All project dependencies use permissive licenses compatible with BSD 3-Clause:
 
 ** Primary Goals
 
-- Provide an intuitive interface for defining polygons and lines on static images and video frames
+- Provide an intuitive interface for defining polygons and lines on static images
 - Export geometric data in normalized coordinates (0.0 to 1.0 range) suitable for CV system configuration
 - Enable iterative refinement through reload and edit capabilities
 - Maintain simplicity and focus on core functionality for MVP
 
 ** Non-Goals (For MVP)
 
+- Video support (deferred to future version)
 - Real-time video processing or analysis
 - Integration with computer vision processing pipelines
 - Advanced styling or visualization options
@@ -73,17 +75,16 @@ All project dependencies use permissive licenses compatible with BSD 3-Clause:
 
 ** Core User Journey
 
-1. As a user, I want to select an image or video file from my filesystem
-2. As a user, I want to see the selected media displayed in the application window
+1. As a user, I want to select an image file from my filesystem
+2. As a user, I want to see the selected image displayed in the application window
 3. As a user, I want to draw polygons and lines using mouse clicks
 4. As a user, I want to edit the positions of vertices and endpoints
 5. As a user, I want to name my regions and lines
 6. As a user, I want to export my annotations to a YAML or JSON file
-7. As a user, I want to reload a media file and its associated annotation file to make edits
+7. As a user, I want to reload an image and its associated annotation file to make edits
 
 ** Specific Interactions
 
-- As a user working with video, I want to scrub through the timeline to select an appropriate frame for annotation
 - As a user, I want to delete entire shapes or individual vertices
 - As a user, I want to close a polygon or leave it as an open polyline
 - As a user, I want my annotations to have sensible default names that I can optionally customize
@@ -94,7 +95,6 @@ All project dependencies use permissive licenses compatible with BSD 3-Clause:
 
 - The application SHALL provide a native file selection dialog
 - The application SHALL support common image formats (JPEG, PNG, BMP, TIFF)
-- The application SHALL support common video formats (MP4, AVI, MOV, MKV)
 - The application SHALL validate that selected files are readable and supported
 
 ** FR-002: Image Display
@@ -103,13 +103,14 @@ All project dependencies use permissive licenses compatible with BSD 3-Clause:
 - The application SHALL scale the image to fit the window while maintaining aspect ratio
 - The application SHALL allow zooming and panning (nice-to-have for MVP)
 
-** FR-003: Video Frame Selection
+** FR-003: Video Frame Selection (DEFERRED TO FUTURE VERSION)
 
-- The application SHALL provide a timeline scrubber control for video files
-- The application SHALL allow users to select a specific frame for annotation
-- The application SHALL assume fixed camera position (ROIs apply to entire video)
-- The application SHOULD display the current frame number or timestamp
-- Video playback with ROI overlay is a nice-to-have feature (not required for MVP)
+# Video support has been deferred. The following requirements are not implemented in the current version:
+# - The application SHALL provide a timeline scrubber control for video files
+# - The application SHALL allow users to select a specific frame for annotation
+# - The application SHALL assume fixed camera position (ROIs apply to entire video)
+# - The application SHOULD display the current frame number or timestamp
+# - Video playback with ROI overlay is a nice-to-have feature (not required for MVP)
 
 ** FR-004: Polygon Creation
 
@@ -166,7 +167,6 @@ All project dependencies use permissive licenses compatible with BSD 3-Clause:
 ** NFR-001: Performance
 
 - The application SHALL load and display images up to 4K resolution without significant delay
-- The application SHALL handle video files up to 1 hour in length
 - The application SHALL respond to user interactions within 100ms under normal conditions
 
 ** NFR-002: Usability
@@ -195,7 +195,6 @@ All project dependencies use permissive licenses compatible with BSD 3-Clause:
 Recommended technology stack:
 - *Language:* Rust (latest stable)
 - *GUI Framework:* egui with eframe
-- *Video Processing:* opencv crate or ffmpeg-next for video frame extraction
 - *Image Handling:* image crate for loading and manipulation
 - *Data Serialization:* serde with serde_yaml and serde_json
 
@@ -214,10 +213,9 @@ Recommended technology stack:
 *** Export Format Structure (YAML Example)
 
 #+BEGIN_SRC yaml
-media_file: "path/to/video.mp4"
+media_file: "path/to/image.jpg"
 frame_width: 1920
 frame_height: 1080
-frame_number: 150  # for videos only
 annotations:
   - name: "region 1"
     type: "polygon"
@@ -262,7 +260,7 @@ roids/
 │   │   └── project.rs       # Project state management
 │   ├── io/
 │   │   ├── mod.rs
-│   │   ├── media.rs         # Image/video loading
+│   │   ├── media.rs         # Image loading
 │   │   └── serialization.rs # YAML/JSON export/import
 │   └── util/
 │       ├── mod.rs
@@ -297,12 +295,10 @@ roids/
 ├─────────────────────────────────────────────────┤
 │                                                 │
 │                                                 │
-│          [Canvas - Image/Video Display]         │
+│          [Canvas - Image Display]               │
 │          [with polygon/line overlays]           │
 │                                                 │
 │                                                 │
-├─────────────────────────────────────────────────┤
-│ [Timeline Scrubber]  (for videos)               │
 ├─────────────────────────────────────────────────┤
 │ Annotations:        │ Properties:               │
 │ □ region 1          │ Name: [region 1    ]      │
@@ -410,10 +406,11 @@ Custom colors and line styles are deferred to post-MVP.
 - Implement naming and properties panel
 - Implement annotation list view
 
-** Milestone 4: Video Support (Week 7-8)
-- Implement video frame extraction
-- Implement timeline scrubber control
-- Integrate frame selection with canvas
+** Milestone 4: Video Support (DEFERRED TO FUTURE VERSION)
+# Video support has been deferred and is not part of the current MVP
+# - Implement video frame extraction
+# - Implement timeline scrubber control
+# - Integrate frame selection with canvas
 
 ** Milestone 5: Data Persistence (Week 9-10)
 - Implement YAML export
@@ -437,12 +434,12 @@ Custom colors and line styles are deferred to post-MVP.
 
 ** Integration Tests
 - File I/O operations
-- Media loading (images and videos)
+- Image loading
 - Export/import round-trip
 
 ** Manual Testing
 - UI interactions across platforms
-- Edge cases (very large/small images, long videos)
+- Edge cases (very large/small images)
 - File format compatibility
 - User workflow validation
 
@@ -459,10 +456,8 @@ Custom colors and line styles are deferred to post-MVP.
 | Risk                          | Likelihood | Impact | Mitigation                              |
 |-------------------------------+------------+--------+-----------------------------------------|
 | Rust learning curve           | Medium     | Medium | Start with simple features, use docs    |
-| Video codec support issues    | Medium     | Medium | Test opencv vs ffmpeg crates early      |
 | egui maturity for this use    | Low        | Medium | egui is proven for tool UIs, many examples |
 | Cross-platform build issues   | Low        | Medium | Test early on all target platforms      |
-| Performance with large videos | Low        | Medium | Rust performance should handle well     |
 | Native file dialogs in egui   | Low        | Medium | Use rfd crate for native dialogs        |
 | Coordinate precision issues   | Low        | High   | Use f64 for coordinates, add validation |
 
@@ -470,7 +465,7 @@ Custom colors and line styles are deferred to post-MVP.
 
 The MVP will be considered successful when:
 
-1. A user can load an image or video file
+1. A user can load an image file
 2. A user can create and edit polygons and lines
 3. A user can export annotations to YAML/JSON with normalized coordinates
 4. A user can reload and edit a previous annotation session
@@ -523,10 +518,10 @@ version = "0.1.0"
 edition = "2021"
 authors = ["Jason Jenkins"]
 license = "BSD-3-Clause"
-description = "Region Of Interest Designation System - A tool for annotating images and videos"
+description = "Region Of Interest Designation System - A tool for annotating images"
 repository = "https://github.com/yourusername/roids"
 keywords = ["computer-vision", "annotation", "roi", "image-processing"]
-categories = ["multimedia::video", "graphics"]
+categories = ["graphics"]
 #+END_SRC
 
 *** License Files Required
@@ -534,14 +529,6 @@ categories = ["multimedia::video", "graphics"]
 - LICENSE or LICENSE.txt containing the full BSD 3-Clause license text
 - Optional NOTICE or CREDITS file documenting third-party components
 - README should include license badge and attribution section
-
-*** OpenCV/FFmpeg Considerations
-
-- The opencv Rust crate (MIT) wraps the OpenCV C++ library (Apache-2.0)
-- Apache-2.0 is compatible with BSD 3-Clause when dynamically linked
-- If using ffmpeg-next, note that FFmpeg itself may be LGPL or GPL depending on build configuration
-- For maximum permissiveness, ensure FFmpeg is built with LGPL-compatible options only
-- Document runtime dependencies in README
 
 ** Reference Materials
 
