@@ -6,13 +6,33 @@
 //! This module defines the core data structures for representing
 //! polygons, lines, and their properties.
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 /// A 2D point with normalized coordinates (0.0 to 1.0).
-#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+/// Serializes as a two-element array [x, y].
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Point {
     pub x: f64,
     pub y: f64,
+}
+
+impl Serialize for Point {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        (self.x, self.y).serialize(serializer)
+    }
+}
+
+impl<'de> Deserialize<'de> for Point {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let (x, y) = <(f64, f64)>::deserialize(deserializer)?;
+        Ok(Point { x, y })
+    }
 }
 
 impl Point {
@@ -43,13 +63,41 @@ pub enum AnnotationType {
     Line,
 }
 
+/// Wrapper for vertices that serializes with flow style in YAML.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Vertices(pub Vec<Point>);
+
+impl Serialize for Vertices {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        use serde::ser::SerializeSeq;
+        let mut seq = serializer.serialize_seq(Some(self.0.len()))?;
+        for point in &self.0 {
+            seq.serialize_element(point)?;
+        }
+        seq.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for Vertices {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let points = Vec::<Point>::deserialize(deserializer)?;
+        Ok(Vertices(points))
+    }
+}
+
 /// An annotation (polygon or line) with a name and vertices.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Annotation {
     pub name: String,
     #[serde(rename = "type")]
     pub annotation_type: AnnotationType,
-    pub vertices: Vec<Point>,
+    pub vertices: Vertices,
 }
 
 impl Annotation {
@@ -58,20 +106,20 @@ impl Annotation {
         Self {
             name,
             annotation_type,
-            vertices: Vec::new(),
+            vertices: Vertices(Vec::new()),
         }
     }
 
     /// Add a vertex to the annotation.
     pub fn add_vertex(&mut self, point: Point) {
-        self.vertices.push(point);
+        self.vertices.0.push(point);
     }
 
     /// Remove a vertex at the specified index.
     /// Returns true if a vertex was removed, false if the index was out of bounds.
     pub fn remove_vertex(&mut self, index: usize) -> bool {
-        if index < self.vertices.len() {
-            self.vertices.remove(index);
+        if index < self.vertices.0.len() {
+            self.vertices.0.remove(index);
             true
         } else {
             false
@@ -81,14 +129,14 @@ impl Annotation {
     /// Find the index of the vertex closest to the given point.
     /// Returns None if the annotation has no vertices.
     pub fn find_nearest_vertex(&self, point: &Point) -> Option<usize> {
-        if self.vertices.is_empty() {
+        if self.vertices.0.is_empty() {
             return None;
         }
 
         let mut min_distance = f64::MAX;
         let mut nearest_index = 0;
 
-        for (i, vertex) in self.vertices.iter().enumerate() {
+        for (i, vertex) in self.vertices.0.iter().enumerate() {
             let dist = vertex.distance_squared(point);
             if dist < min_distance {
                 min_distance = dist;
@@ -104,7 +152,7 @@ impl Annotation {
     pub fn find_vertex_within_threshold(&self, point: &Point, threshold: f64) -> Option<usize> {
         let threshold_sq = threshold * threshold;
 
-        self.vertices
+        self.vertices.0
             .iter()
             .enumerate()
             .filter(|(_, v)| v.distance_squared(point) <= threshold_sq)
@@ -119,8 +167,8 @@ impl Annotation {
     /// Update the position of a vertex at the given index.
     /// Returns true if the vertex was updated, false if the index was out of bounds.
     pub fn update_vertex(&mut self, index: usize, new_position: Point) -> bool {
-        if index < self.vertices.len() {
-            self.vertices[index] = new_position;
+        if index < self.vertices.0.len() {
+            self.vertices.0[index] = new_position;
             true
         } else {
             false
@@ -134,7 +182,7 @@ impl Annotation {
 
     /// Get the number of vertices in this annotation.
     pub fn vertex_count(&self) -> usize {
-        self.vertices.len()
+        self.vertices.0.len()
     }
 }
 
@@ -163,7 +211,7 @@ mod tests {
         let annotation = Annotation::new("region 1".to_string(), AnnotationType::Polygon);
         assert_eq!(annotation.name, "region 1");
         assert_eq!(annotation.annotation_type, AnnotationType::Polygon);
-        assert_eq!(annotation.vertices.len(), 0);
+        assert_eq!(annotation.vertices.0.len(), 0);
         assert!(annotation.is_closed());
     }
 
@@ -186,7 +234,7 @@ mod tests {
 
         assert!(annotation.remove_vertex(1));
         assert_eq!(annotation.vertex_count(), 2);
-        assert_eq!(annotation.vertices[1], Point::new(1.0, 1.0));
+        assert_eq!(annotation.vertices.0[1], Point::new(1.0, 1.0));
 
         assert!(!annotation.remove_vertex(10));
     }
@@ -198,7 +246,7 @@ mod tests {
         annotation.add_vertex(Point::new(1.0, 0.0));
 
         assert!(annotation.update_vertex(0, Point::new(0.5, 0.5)));
-        assert_eq!(annotation.vertices[0], Point::new(0.5, 0.5));
+        assert_eq!(annotation.vertices.0[0], Point::new(0.5, 0.5));
 
         assert!(!annotation.update_vertex(10, Point::new(0.0, 0.0)));
     }

@@ -229,7 +229,7 @@ fn draw_annotation(
     is_in_progress: bool,
     show_coordinates: bool,
 ) {
-    let vertices = &annotation.vertices;
+    let vertices = &annotation.vertices.0;
     if vertices.is_empty() {
         return;
     }
